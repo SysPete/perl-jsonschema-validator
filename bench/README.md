@@ -38,7 +38,9 @@ Run both on one machine, back to back, pinned to one core, and alternate
 them several times. Within a run the uncertainty is about 0.1-0.2%; between
 runs on a laptop CPU the same code moves by 2-3% (clock speed, temperature),
 and a single unpinned pair of runs once disagreed by over 10%. Compare
-medians across the alternating runs, not one run.
+medians across the alternating runs, not one run. On a CPU with
+performance and efficiency cores, pin to a performance core, and use the
+same Perl version as the baseline you compare against.
 
 ```sh
 git worktree add --detach /tmp/jsv-old <commit>
@@ -62,16 +64,34 @@ From the design ("Performance"):
 
 ## Baselines
 
-Machine: 13th Gen Intel Core i7-1355U, Perl v5.38.2, pinned to CPU 0.
-Medians of three alternating runs, 2026-10-25, ops/sec.
+Two machines, so a later phase can still be compared if one is gone.
+Compare a later run only with the table from the same machine: the
+absolute numbers differ between them. Both use Perl v5.38.2 and report
+medians of three alternating runs, 2026-10-25, in ops/sec.
 
-| workload | before Phase 0 (`9d2ab08`) | Phase 0 (`caf87c6`) | change |
+### tp: laptop, 13th Gen Intel Core i7-1355U, pinned to CPU 0
+
+| workload | before Phase 0 (`9d2ab08`) | Phase 0 (`2d878c9`) | change |
 | --- | ---: | ---: | ---: |
-| draft7 invalid | 13859 | 14189 | +2.4% |
-| draft7 valid | 15363 | 15617 | +1.7% |
-| oas30 request invalid | 6220 | 5988 | -3.7% |
-| oas30 request valid | 8041 | 7664 | -4.7% |
-| oas30 response invalid | 239.1 | 232.7 | -2.7% |
-| oas30 response valid | 236.1 | 232.4 | -1.6% |
+| draft7 invalid | 13369 | 13944 | +4.3% |
+| draft7 valid | 14936 | 15296 | +2.4% |
+| oas30 request invalid | 5988 | 5864 | -2.1% |
+| oas30 request valid | 7786 | 7575 | -2.7% |
+| oas30 response invalid | 229.3 | 222.9 | -2.8% |
+| oas30 response valid | 229.9 | 223.8 | -2.7% |
 
-The Phase 0 column is the baseline later phases compare against.
+### ducati: desktop, 13th Gen Intel Core i7-13700K, pinned to CPU 4
+
+CPUs 0-15 are its performance cores. Runs here vary by 1-2%, less than on
+the laptop.
+
+| workload | before Phase 0 (`9d2ab08`) | Phase 0 (`2d878c9`) | change |
+| --- | ---: | ---: | ---: |
+| draft7 invalid | 14702 | 15017 | +2.1% |
+| draft7 valid | 16316 | 16656 | +2.1% |
+| oas30 request invalid | 6516 | 6387 | -2.0% |
+| oas30 request valid | 8473 | 8249 | -2.6% |
+| oas30 response invalid | 254.5 | 247.2 | -2.9% |
+| oas30 response valid | 252.8 | 247.0 | -2.3% |
+
+The Phase 0 columns are the baselines later phases compare against.
