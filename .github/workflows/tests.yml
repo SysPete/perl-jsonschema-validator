@@ -23,13 +23,19 @@ jobs:
       - name: Show perl version
         run: perl -V
       - name: Install optional dependencies
-        run: cpanm -n Test::JSON::Schema::Acceptance@1.040 YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+        run: cpanm -n YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+      # Not on Windows: its dependencies won't build for Perl 5.20 there, and
+      # some of them (autovivification, namespace::clean) crash Perl 5.44.
+      # Linux and macOS run the official suite instead.
+      - name: Install acceptance harness
+        if: matrix.os != 'windows-latest'
+        run: cpanm -n Test::JSON::Schema::Acceptance@1.040
       - name: Install common dependencies
         run: cpanm -n --installdeps .
       - name: Run tests
         run: prove -lr t
         env:
-          ACCEPTANCE_TESTING: 1
+          ACCEPTANCE_TESTING: ${{ matrix.os != 'windows-latest' && '1' || '' }}
 
   acceptance-latest:
     name: Acceptance suite, newest release
