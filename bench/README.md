@@ -50,7 +50,11 @@ for i in 1 2 3; do
     taskset -c 0 perl bench/run.pl > new-$i.txt
 done
 git worktree remove /tmp/jsv-old
+perl bench/compare.pl --old old-*.txt --new new-*.txt
 ```
+
+`compare.pl` prints the medians and the change as a Markdown table in the
+format of the baselines below.
 
 ## Gates
 
@@ -95,3 +99,57 @@ the laptop.
 | oas30 response valid | 252.8 | 247.0 | -2.3% |
 
 The Phase 0 columns are the baselines later phases compare against.
+
+## Recording a baseline on a new machine
+
+The baseline numbers only mean something on the machine that produced
+them, so a new or replacement machine needs its own table. Measure the
+same two commits as the existing tables (`9d2ab08` and `2d878c9`): the
+"change" column then shows whether the new machine agrees with the others,
+and the Phase 0 column becomes its baseline.
+
+1. Use Perl v5.38.2, as the existing tables do. The system Perl is
+   probably a different version, so install one alongside it, for example
+   `perlbrew install perl-5.38.2`, and put its `bin` first in `PATH` for
+   every command below. `perl -v` should report v5.38.2.
+
+2. Install the dependencies into `local/`. URI is the validator's runtime
+   dependency, needed by both commits:
+
+   ```sh
+   cpm install -L local Dumbbench URI
+   ```
+
+3. Pick a core. On an Intel CPU with performance and efficiency cores,
+   `cat /sys/devices/cpu_core/cpus` lists the performance cores (tp: 0-3,
+   ducati: 0-15); pick one of those. Elsewhere any core will do. Close
+   other busy programs and keep a laptop on mains power.
+
+4. Run the two commits alternately, three times each, with the core from
+   step 3 in place of `N`:
+
+   ```sh
+   git worktree add --detach /tmp/jsv-pre-phase0 9d2ab08
+   git worktree add --detach /tmp/jsv-phase0 2d878c9
+   export PERL5LIB=local/lib/perl5
+   for i in 1 2 3; do
+       taskset -c N perl bench/run.pl --lib /tmp/jsv-pre-phase0/lib > old-$i.txt
+       taskset -c N perl bench/run.pl --lib /tmp/jsv-phase0/lib > new-$i.txt
+   done
+   git worktree remove /tmp/jsv-pre-phase0
+   git worktree remove /tmp/jsv-phase0
+   perl bench/compare.pl --old old-*.txt --new new-*.txt
+   ```
+
+   Each run takes a few seconds. Use the current `bench/` for both
+   commits, via `--lib`: the workloads must be the same for both.
+
+5. Check the result. Every "change" should be within about 3 points of
+   the other machines' tables. If it isn't, or one workload's three runs
+   are far apart, look for a busy machine or a throttling CPU and run it
+   again.
+
+6. Add a section under "Baselines" headed with the hostname, CPU model
+   (`lscpu | grep 'Model name'`) and the core you pinned to, then paste
+   the table, renaming its columns to match the other tables. Note
+   anything unusual, such as how much the runs varied.
