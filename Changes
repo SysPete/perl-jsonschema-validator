@@ -3,6 +3,8 @@ Revision history for JSONSchema-Validator
 0.012  Not Released
     - References resolve against URN base URIs (urn:uuid:...) instead of
       dying; a relative path against such a base is a validation error
+    - The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas resolve by their
+      canonical id without fetching them
     - Minimum Perl version is now 5.20
     - Numbers decoded as Math::BigInt / Math::BigFloat are validated
       as numbers; enum, const and uniqueItems compare numbers numerically

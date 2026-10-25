@@ -12,6 +12,7 @@ use JSONSchema::Validator::Draft4;
 use JSONSchema::Validator::Draft6;
 use JSONSchema::Validator::Draft7;
 use JSONSchema::Validator::OAS30;
+use JSONSchema::Validator::BundledSchemas qw( read_bundled_schema );
 use JSONSchema::Validator::Util qw( load_schema );
 
 our $VERSION = '0.011';
@@ -160,9 +161,7 @@ sub validate_resource_schema {
 }
 
 sub read_specification {
-    my $filename = shift;
-    my $schema_filepath = URI::file->new_abs((__FILE__ =~ s/\.pm$//r) . '/schemas/' . lc($filename) . '.json');
-    return load_schema($schema_filepath);
+    return read_bundled_schema(shift);
 }
 
 sub find_validator {

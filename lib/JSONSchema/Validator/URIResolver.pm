@@ -13,6 +13,7 @@ use URI::Escape;
 use Encode;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
+use JSONSchema::Validator::BundledSchemas 'bundled_schema';
 use JSONSchema::Validator::Util qw( load_schema resolve_uri );
 
 # what keys contain the schema? Required to find an $id in a schema
@@ -105,7 +106,7 @@ sub cache_resolve {
 
     return $self->cache->{$uri->as_string} if exists $self->cache->{$uri->as_string};
 
-    my $schema = load_schema($uri->as_string, $self->scheme_handlers);
+    my $schema = bundled_schema($uri->as_string) // load_schema($uri->as_string, $self->scheme_handlers);
 
     $self->cache->{$uri->as_string} = $schema;
 
