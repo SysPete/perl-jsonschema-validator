@@ -225,6 +225,17 @@ subtest 'global bignum rounding settings are ignored' => sub {
     }
 };
 
+subtest 'a string is not equal to a number' => sub {
+    for my $schema ({ enum => ['1', 'x'] }, { const => '1' }) {
+        my $keyword = (keys %$schema)[0];
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema);
+        is( ($v->validate_schema(1))[0], 0, "strict $keyword \"1\" rejects 1" );
+        is( ($v->validate_schema('1'))[0], 1, "strict $keyword \"1\" accepts \"1\"" );
+        $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema, strict => 0);
+        is( ($v->validate_schema(1))[0], 1, "non-strict $keyword \"1\" accepts 1" );
+    }
+};
+
 subtest 'strict uniqueItems' => sub {
     my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
     my $exp = '1000000000000000';
