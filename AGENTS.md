@@ -135,3 +135,33 @@ acceptance run actually executed before citing it.
   force-pushing a rebased branch.
 - This is a public repository: no criticism of other projects and no names
   of downstream users in code, POD, commit messages or docs.
+
+## Process
+
+Work is planned and reviewed with the
+[superpowers](https://github.com/obra/superpowers) and
+[paad](https://github.com/Ovid/paad) skills.
+
+1. Design: [brainstorming](https://github.com/obra/superpowers/tree/main/skills/brainstorming)
+   produces or updates the spec in `docs/superpowers/specs/`.
+   [pushback](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/pushback)
+   reviews it, often over several rounds, until no open issues remain.
+2. Plan: each phase gets a plan in `docs/superpowers/plans/`, written with
+   [writing-plans](https://github.com/obra/superpowers/tree/main/skills/writing-plans)
+   when the phase starts. pushback reviews the plan too, then
+   [alignment](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/alignment)
+   checks it against the spec. Each task becomes an issue in the phase's
+   milestone.
+3. Build: [subagent-driven-development](https://github.com/obra/superpowers/tree/main/skills/subagent-driven-development)
+   or [executing-plans](https://github.com/obra/superpowers/tree/main/skills/executing-plans),
+   with [test-driven-development](https://github.com/obra/superpowers/tree/main/skills/test-driven-development)
+   and [systematic-debugging](https://github.com/obra/superpowers/tree/main/skills/systematic-debugging).
+   Tick the plan's checkboxes as tasks finish, and record in the plan where
+   the work departed from it.
+4. Review: [agentic-review](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/agentic-review)
+   on the branch before opening the PR, then a PR to `master`, rebased and
+   merged with a merge commit (see "Changes and commits").
+5. Across sessions: [handoff](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/handoff)
+   when context runs out;
+   [rethink](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/rethink)
+   to check a recommendation before acting on it.
