@@ -194,7 +194,8 @@ For more details look at json schema docs about L<named anchors|https://json-sch
 
 =head4 scheme_handlers
 
-At the moment, the validator can load a resource using the http, https protocols. You can add other protocols yourself.
+The validator loads C<file:> references, and C<http> and C<https> ones when C<fetch_remote> is set.
+A handler adds a scheme, or replaces how one is loaded.
 
     sub loader {
         my $uri = shift;

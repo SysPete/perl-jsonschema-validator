@@ -62,13 +62,22 @@ For more details look at json schema docs about L<named anchors|https://json-sch
 
 =head4 scheme_handlers
 
-At the moment, the validator can load a resource using the http, https protocols. You can add other protocols yourself.
+The validator loads C<file:> references, and C<http> and C<https> ones when C<fetch_remote> is set.
+A handler adds a scheme, or replaces how one is loaded.
 
     sub loader {
         my $uri = shift;
         ...
     }
     $validator = JSONSchema::Validator::Draft6->new(schema => {...}, scheme_handlers => {ftp => \&loader});
+
+=head4 fetch_remote
+
+As in L<JSONSchema::Validator::Draft4/fetch_remote>: C<http> and C<https> references are not loaded by default.
+
+=head4 documents
+
+As in L<JSONSchema::Validator::Draft4/documents>: preloads documents so references to them need no loading.
 
 =head1 METHODS
 
