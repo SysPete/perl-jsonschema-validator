@@ -10,7 +10,7 @@ use JSONSchema::Validator::JSONPointer;
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::Constraints::OAS30;
 use JSONSchema::Validator::URIResolver;
-use JSONSchema::Validator::Util 'json_decode';
+use JSONSchema::Validator::Util qw(json_decode exception_message);
 
 use parent 'JSONSchema::Validator::Draft4';
 
@@ -89,6 +89,12 @@ sub validate_request {
     my $method = lc($params{method} or croak 'param "method" is required');
     my $openapi_path = $params{openapi_path} or croak 'param "openapi_path" is required';
 
+    return $self->_catch_exception(sub { $self->_validate_request($method, $openapi_path, %params) });
+}
+
+sub _validate_request {
+    my ($self, $method, $openapi_path, %params) = @_;
+
     my $get_user_param = $self->_wrap_params($params{parameters});
 
     my $user_body = $params{parameters}{body} // []; # [exists, content-type, value]
@@ -135,6 +141,13 @@ sub validate_response {
     my $openapi_path = $params{openapi_path} or croak 'param "openapi_path" is required';
     my $http_status = $params{status} or croak 'param "status" is required';
 
+    return $self->_catch_exception(
+        sub { $self->_validate_response($method, $openapi_path, $http_status, %params) });
+}
+
+sub _validate_response {
+    my ($self, $method, $openapi_path, $http_status, %params) = @_;
+
     my $get_user_param = $self->_wrap_params($params{parameters});
 
     my $user_body = $params{parameters}{body} // []; # [exists, content-type, value]
@@ -178,6 +191,15 @@ sub validate_response {
     push @{$context->{warnings}}, error(message => 'response body warning', context => $warnings) if @$warnings;
 
     return $result, $context->{errors}, $context->{warnings};
+}
+
+# A reference that fails to load dies while the document is walked; report it as validation does.
+sub _catch_exception {
+    my ($self, $code) = @_;
+
+    my @result;
+    return @result if eval { @result = $code->(); 1 };
+    return 0, [error(message => 'exception: ' . exception_message($@))], [];
 }
 
 sub _validate_body {

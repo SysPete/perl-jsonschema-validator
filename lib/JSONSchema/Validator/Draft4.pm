@@ -208,7 +208,9 @@ A handler for C<http> or C<https> also allows documents to load over that scheme
 
 Allow the validator to load C<http> and C<https> references found in the schema. Default value is 0:
 then C<new> croaks on such a reference unless the document is preloaded with C<documents>, a
-C<scheme_handlers> entry covers its scheme, or it is a bundled meta-schema.
+C<scheme_handlers> entry covers its scheme, or it is a bundled meta-schema. C<new> searches
+C<schema> and C<documents>; a reference in a document loaded later, through a C<file:> reference
+for example, fails when validation reaches it, as an C<exception:> error.
 
 It does not cover local files: a C<file:> reference, or one with no scheme, which is a path, is
 read from disk, and parts of the file can appear in error messages. To validate against a schema

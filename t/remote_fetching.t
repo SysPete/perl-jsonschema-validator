@@ -166,6 +166,30 @@ subtest 'the scan at new handles a cyclic schema' => sub {
         'builds';
 };
 
+subtest 'OAS30 reports a reference that fails to load instead of dying' => sub {
+    my $path_item = 'file://' . test_dir('data/remote_fetching/path_item.json');
+    my $v = JSONSchema::Validator::OAS30->new(schema => {
+        openapi => '3.0.3', info => { title => 't', version => '1' },
+        paths => {
+            '/remote' => { '$ref' => $path_item },
+            '/missing' => { '$ref' => 'file://' . test_dir('data/remote_fetching/no_such.json') },
+        } });
+
+    for my $case (['/remote', qr/^exception: Remote fetching is disabled: cannot load http:\/\/example\.invalid\/item\.json\./],
+                  ['/missing', qr/^exception: Failed to load resource/]) {
+        my ($openapi_path, $error) = @$case;
+        my ($r, $e) = eval { $v->validate_request(method => 'get', openapi_path => $openapi_path) };
+        is $@, '', "request $openapi_path does not die";
+        is $r, 0, "request $openapi_path fails";
+        like errors_text($e // []), $error, "request $openapi_path says why";
+
+        ($r, $e) = eval { $v->validate_response(method => 'get', openapi_path => $openapi_path, status => 200) };
+        is $@, '', "response $openapi_path does not die";
+        is $r, 0, "response $openapi_path fails";
+        like errors_text($e // []), $error, "response $openapi_path says why";
+    }
+};
+
 subtest 'local files can be refused' => sub {
     my $path = test_dir('data/remote_fetching/integer.json');
     my %refuse = (

@@ -68,7 +68,9 @@ By default C<base_uri> is equal to the resource path if the resource parameter i
 =item fetch_remote
 
 Allow loading C<http> and C<https> references found in the schema. Default value is 0, and C<new>
-croaks on such a reference unless C<documents> or C<scheme_handlers> covers it.
+croaks on such a reference in C<schema> or C<documents> unless C<documents> or C<scheme_handlers>
+covers it. One in a document loaded later, through a C<file:> reference for example, fails when
+validation reaches it.
 
 =item documents
 
