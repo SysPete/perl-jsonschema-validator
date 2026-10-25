@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 use Test::More;
-use Config;
 
 use lib 't/lib';
 
@@ -22,9 +21,15 @@ unless (eval { require Test::JSON::Schema::Acceptance; 1; }) {
     plan skip_all => 'Test::JSON::Schema::Acceptance is not installed'
 }
 
+binmode Test::More->builder->$_, ':encoding(UTF-8)'
+    for qw(output failure_output todo_output);
+
 for my $validator_class (@{$JSONSchema::Validator::JSON_SCHEMA_VALIDATORS}) {
     my $specification = lc($validator_class->SPECIFICATION);
-    my $accepter = Test::JSON::Schema::Acceptance->new(specification => $specification);
+    my $accepter = Test::JSON::Schema::Acceptance->new(
+        specification => $specification,
+        include_optional => 0,
+    );
 
     my $ua_get = sub {
         my $uri = shift;
@@ -43,12 +48,7 @@ for my $validator_class (@{$JSONSchema::Validator::JSON_SCHEMA_VALIDATORS}) {
                 scheme_handlers => {'http' => $ua_get}
             )->validate_schema($input_data);
             return $result;
-        },
-        todo_tests => [
-            $Config{nvsize} >= 12
-                ? { file => 'multipleOf.json' } # issue https://github.com/json-schema-org/JSON-Schema-Test-Suite/pull/438
-                : ()
-        ]
+        }
     );
 }
 
