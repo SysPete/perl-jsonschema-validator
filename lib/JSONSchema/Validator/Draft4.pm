@@ -221,7 +221,8 @@ that is not a path, such as C<urn:example:schema>, so a reference with no scheme
 
 Hash reference of URI to schema, to preload documents so references to them resolve without being loaded.
 The URI C<http://example.com/s.json#> is the same entry as C<http://example.com/s.json>.
-C<$id> keys inside each document are indexed as for the root schema.
+C<$id> keys inside each document are indexed as for the root schema. C<new> croaks if a key, or an
+C<$id> inside a document, names the schema, another document or a different C<$id> already indexed.
 
     $validator = JSONSchema::Validator::Draft4->new(
         schema => {'$ref' => 'http://example.com/s.json'},

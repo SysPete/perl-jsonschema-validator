@@ -166,6 +166,33 @@ subtest 'the scan at new handles a cyclic schema' => sub {
         'builds';
 };
 
+subtest 'documents that would replace each other croak' => sub {
+    my $already = qr/^documents: http:\/\/e\.invalid\/s\.json is already defined/;
+    for my $case (
+        ['two keys for one URI', {}, {
+            'http://e.invalid/s.json' => { type => 'integer' },
+            'http://e.invalid/s.json#' => { type => 'string' } }],
+        ['the schema URI', { base_uri => 'http://e.invalid/s.json' }, {
+            'http://e.invalid/s.json#' => { type => 'integer' } }],
+        ['an $id in the schema', { schema => { definitions => { a => { '$id' => 'http://e.invalid/s.json' } } } }, {
+            'http://e.invalid/s.json' => { type => 'integer' } }],
+        ['an $id in another document', {}, {
+            'http://e.invalid/s.json' => { type => 'integer' },
+            'http://e.invalid/a.json' => { definitions => { x => { '$id' => 'http://e.invalid/s.json' } } } }],
+    ) {
+        my ($name, $params, $documents) = @$case;
+        # the same answer whichever order the hash gives the keys in
+        for (1 .. 5) {
+            like construct('JSONSchema::Validator::Draft7', schema => { type => 'string' }, %$params,
+                documents => $documents), $already, $name;
+        }
+    }
+    is construct('JSONSchema::Validator::Draft7',
+        schema => { '$id' => 'http://e.invalid/root.json', definitions => { a => { '$id' => 'a.json' } } },
+        documents => { 'http://e.invalid/b.json' => { '$id' => 'http://e.invalid/b.json' } }),
+        'ok', 'a document whose $id is its own key';
+};
+
 subtest 'OAS30 reports a reference that fails to load instead of dying' => sub {
     my $path_item = 'file://' . test_dir('data/remote_fetching/path_item.json');
     my $v = JSONSchema::Validator::OAS30->new(schema => {

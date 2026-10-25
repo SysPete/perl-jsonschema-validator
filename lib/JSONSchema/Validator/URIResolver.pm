@@ -70,9 +70,7 @@ sub new {
 
     my $self = {
         validator => $validator,
-        cache => {
-            $base_uri => $schema
-        },
+        cache => {},
         scheme_handlers => $scheme_handlers,
         fetch_remote => $fetch_remote
     };
@@ -83,10 +81,17 @@ sub new {
 
     $self->cache_id(URI->new($base_uri), $schema) if $validator->using_id_with_ref && ref $schema eq 'HASH';
 
-    for my $document_uri (keys %$documents) {
+    # a document must not silently replace the schema, another document or an $id in either
+    my %document_keys;
+    for my $document_uri (sort keys %$documents) {
+        my $key = _document_key($document_uri);
+        croak "documents: $key is already defined" if exists $self->{cache}{$key};
+        $document_keys{$document_uri} = $self->_add_document($document_uri, $documents->{$document_uri});
+    }
+    for my $document_uri (sort keys %$documents) {
         my $document = $documents->{$document_uri};
-        my $key = $self->_add_document($document_uri, $document);
-        $self->cache_id(URI->new($key), $document) if $validator->using_id_with_ref && ref $document eq 'HASH';
+        next unless $validator->using_id_with_ref && ref $document eq 'HASH';
+        $self->cache_id(URI->new($document_keys{$document_uri}), $document, 1);
     }
 
     # fail now, not when some later instance reaches the reference
@@ -103,14 +108,19 @@ sub scheme_handlers { shift->{scheme_handlers} }
 sub fetch_remote { shift->{fetch_remote} }
 sub cache { shift->{cache} }
 
+sub _document_key {
+    my ($uri) = @_;
+    return '#' eq substr($uri, -1) ? substr($uri, 0, -1) : $uri;
+}
+
 # Caches the schema under the uri without an empty fragment; returns that key.
 sub _add_document {
     my ($self, $uri, $schema) = @_;
 
-    $uri = substr $uri, 0, -1 if '#' eq substr $uri, -1;
-    $self->{cache}{$uri} = $schema;
+    my $key = _document_key($uri);
+    $self->{cache}{$key} = $schema;
 
-    return $uri;
+    return $key;
 }
 
 # self - URIResolver
@@ -250,21 +260,22 @@ sub fragment_resolve {
 # self - URIResolver
 # uri - URI
 # schema - HASH/ARRAY
+# croak_on_conflict - croak instead of replacing an entry for a different schema
 sub cache_id {
-    my ($self, $uri, $schema) = @_;
+    my ($self, $uri, $schema, $croak_on_conflict) = @_;
 
     # try to find id/$id and cache it to properly handle links in $ref
     # https://json-schema.org/understanding-json-schema/structuring.html#using-id-with-ref
 
     my $scopes = [$uri];
-    $self->cache_id_dfs($schema, $scopes);
+    $self->cache_id_dfs($schema, $scopes, $croak_on_conflict);
 }
 
 # self - URIResolver
 # schema - HASH/ARRAY
 # scopes - [URI, ...]
 sub cache_id_dfs {
-    my ($self, $schema, $scopes) = @_;
+    my ($self, $schema, $scopes, $croak_on_conflict) = @_;
     return unless ref $schema eq 'HASH';
 
     # skip all fields (id field too) if $ref present (draft 4-7)
@@ -273,19 +284,22 @@ sub cache_id_dfs {
     if (exists $schema->{$self->validator->ID_FIELD} && !ref $schema->{$self->validator->ID_FIELD}) {
         my $id = resolve_uri($schema->{$self->validator->ID_FIELD}, $scopes->[-1]);
 
+        my $existing = $self->cache->{$id->as_string};
+        croak "documents: $id is already defined"
+            if $croak_on_conflict && defined $existing && $existing != $schema;
         $self->cache->{$id->as_string} = $schema;
         push @$scopes, $id;
     }
 
     for my $k (keys %$schema) {
         if ($SEARCH_ID->{value}{$k} && ref $schema->{$k} eq 'HASH') {
-            $self->cache_id_dfs($schema->{$k}, $scopes);
+            $self->cache_id_dfs($schema->{$k}, $scopes, $croak_on_conflict);
         }
 
         if ($SEARCH_ID->{arr_value}{$k} && ref $schema->{$k} eq 'ARRAY') {
             for my $value (@{$schema->{$k}}) {
                 next unless ref $value eq 'HASH';
-                $self->cache_id_dfs($value, $scopes);
+                $self->cache_id_dfs($value, $scopes, $croak_on_conflict);
             }
         }
 
@@ -293,7 +307,7 @@ sub cache_id_dfs {
             for my $kv_key (keys %{$schema->{$k}}) {
                 my $value = $schema->{$k}{$kv_key};
                 next unless ref $value eq 'HASH';
-                $self->cache_id_dfs($value, $scopes);
+                $self->cache_id_dfs($value, $scopes, $croak_on_conflict);
             }
         }
     }
