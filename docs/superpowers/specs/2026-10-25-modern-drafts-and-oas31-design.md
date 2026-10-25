@@ -61,7 +61,8 @@ Failure even if every test passes:
   The code keeps its existing style: `use strict; use warnings;`,
   `my ($self, ...) = @_`, no signatures, no postfix dereferencing. Features up
   to 5.20 (`//`, `state`, `s///r`, key/value slices) are fine. CI tests 5.20
-  through the latest stable Perl on Linux, macOS and Windows.
+  through the latest stable Perl: Linux covers every version, macOS and
+  Windows the oldest and newest.
 - **Every new runtime dependency is justified** in the plan that adds it.
   Format and IDN support use existing CPAN modules, as optional dependencies
   loaded when present (the same pattern as the YAML modules).
@@ -99,7 +100,7 @@ Builder's calls, made while writing this document (revisit if wrong):
 - "Remote" means `http` and `https`. Fetching them needs an explicit opt-in
   (constructor option). `file:` URIs and plain paths keep working, since a
   schema's local files are under its author's control. A caller can preload
-  documents by URI (e.g. a `resources => { $uri => $schema }` option), which
+  documents by URI (a `documents => { $uri => $schema }` option), which
   is also how a caller supplies remote schemas without enabling fetching.
   Caller-supplied `scheme_handlers` keep working as now.
 
