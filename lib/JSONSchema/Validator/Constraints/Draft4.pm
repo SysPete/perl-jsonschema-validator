@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers format_number resolve_uri exception_message);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -706,9 +706,10 @@ sub uniqueItems {
 sub _unique_items_strict {
     my ($self, $instance, $instance_path, $schema_path, $data) = @_;
 
-    for my $i (0 .. $#$instance - 1) {
-        for my $j ($i + 1 .. $#$instance) {
-            next unless json_equal($instance->[$i], $instance->[$j]);
+    my %seen;
+    for my $item (@$instance) {
+        my $same_key = $seen{canonical_json_key($item)} //= [];
+        if (grep { json_equal($_, $item) } @$same_key) {
             push @{$data->{errors}}, error(
                 message => "instance has non-unique elements",
                 instance_path => $instance_path,
@@ -716,6 +717,7 @@ sub _unique_items_strict {
             );
             return 0;
         }
+        push @$same_key, $item;
     }
     return 1;
 }

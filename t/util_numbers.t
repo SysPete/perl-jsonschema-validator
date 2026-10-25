@@ -146,5 +146,42 @@ subtest 'a huge exponent is never written out in full' => sub {
     }
 };
 
+subtest 'strict uniqueItems' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    my $exp = '1000000000000000';
+    for my $case (
+        [[1, 1.0], 0, '1 and 1.0'],
+        [[1, Math::BigFloat->new('1.0')], 0, '1 and BigFloat 1.0'],
+        [[0, -0.0], 0, '0 and -0.0'],
+        [[$big, 2**70], 0, 'BigInt 2**70 and the float 2**70'],
+        [[$big + 1, 2**70], 1, 'BigInt 2**70+1 and the float 2**70'],
+        [[0.1, Math::BigFloat->new('0.1')], 0, '0.1 and BigFloat 0.1'],
+        [[1, '1'], 1, 'number and string'],
+        [[1, JSON::PP::true], 1, 'number and true'],
+        [[JSON::PP::true, JSON::PP::true], 0, 'true twice'],
+        [[undef, undef], 0, 'null twice'],
+        [[undef, ''], 1, 'null and empty string'],
+        [[{a => [1, 'x']}, {a => [1.0, 'x']}], 0, 'nested 1 and 1.0'],
+        [[{a => 1}, {a => 1, b => 2}], 1, 'different keys'],
+        [[{'a,b' => 1}, {a => 1, b => 1}], 1, 'keys that would run together'],
+        [[['a', 'b'], ['a,b']], 1, 'strings that would run together'],
+        [[Math::BigFloat->new("1e$exp"), Math::BigFloat->new("10e" . ($exp - 1))], 0, 'equal huge exponents'],
+        [[Math::BigFloat->new("1e$exp"), Math::BigFloat->new("2e$exp")], 1, 'different huge exponents'],
+    ) {
+        my ($instance, $expected, $name) = @$case;
+        my ($r, $e) = $v->validate_schema($instance);
+        is $r, $expected, $name or diag errors_text($e);
+        like errors_text($e), qr/^instance has non-unique elements/, "$name says why" unless $expected;
+    }
+
+    # pairwise this takes minutes; one pass takes well under a second
+    my @objects = map { { id => $_, tags => ['x', $_ * 1.5] } } 1 .. 20000;
+    my $start = time;
+    is( ($v->validate_schema(\@objects))[0], 1, '20000 distinct objects' );
+    cmp_ok time - $start, '<', 10, 'in linear time';
+    push @objects, { id => 7, tags => ['x', 10.5] };
+    is( ($v->validate_schema(\@objects))[0], 0, 'a late duplicate is found' );
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

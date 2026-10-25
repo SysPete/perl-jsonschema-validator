@@ -15,7 +15,7 @@ use URI 1.00 ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type is_bignum json_equal comparable_numbers format_number
+    round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number
     data_section load_schema resolve_uri exception_message
 );
 
@@ -342,6 +342,54 @@ sub json_equal {
 
     return 0 unless is_string($x, 1) && is_string($y, 1);
     return $x eq $y ? 1 : 0;
+}
+
+{
+    my $unique = 0;
+
+    # Values that json_equal finds equal get the same key, and in practice nothing else does.
+    sub canonical_json_key {
+        my ($x) = @_;
+
+        return 'n' unless defined $x;
+        if (!ref $x) {
+            return is_number($x, 1) ? _number_key($x) : 's' . length($x) . ':' . $x;
+        }
+        return 'b' . ($x ? 1 : 0) if is_bool($x, 1);
+        return _number_key($x) if is_number($x, 1);
+        return '[' . join(',', map { canonical_json_key($_) } @$x) . ']' if is_array($x);
+        if (is_object($x)) {
+            return '{' . join(',', map {
+                's' . length($_) . ':' . $_ . '=' . canonical_json_key($x->{$_})
+            } sort keys %$x) . '}';
+        }
+        return 'u' . $unique++;
+    }
+
+    sub _number_key {
+        my ($n) = @_;
+
+        my ($sign, $digits, $exponent);
+        if (ref $n) {
+            return 'u' . $unique++ if $n->is_nan;
+            return $n->is_inf('-') ? 'd-inf' : 'dinf' if $n->is_inf;
+            # parts is mantissa and exponent without writing out the zeros
+            my ($m, $e) = $n->isa('Math::BigFloat') ? $n->parts : ($n->copy, 0);
+            ($sign, $digits, $exponent) = ($m < 0 ? '-' : '', $m->copy->babs->bstr, "$e");
+        } else {
+            return 'u' . $unique++ if $n != $n;
+            return $n < 0 ? 'd-inf' : 'dinf' if abs($n) == 9**9**9;
+            my $s = _exact_number_string($n);
+            $s =~ /\A([-+]?)(\d*)(?:\.(\d*))?(?:[eE]([-+]?\d+))?\z/ or return 'u' . $unique++;
+            my $frac = $3 // '';
+            ($sign, $digits, $exponent) = ($1 eq '-' ? '-' : '', $2 . $frac, ($4 // 0) - length $frac);
+        }
+
+        $digits =~ s/\A0+//;
+        return 'd0' if $digits eq '';
+        $digits =~ s/(0+)\z// and $exponent += length $1;
+        return "d$sign${digits}e$exponent";
+    }
 }
 
 # params: $value, $is_strict
