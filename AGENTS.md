@@ -112,6 +112,12 @@ acceptance run actually executed before citing it.
 - `cpanfile` - written by `dzil build` from `dist.ini`. Change prereqs in
   `dist.ini`; if you can't run `dzil`, update `cpanfile` to match by hand.
 
+## CI
+
+- Pin every GitHub Action to a full commit SHA with the release in a
+  comment, never a tag: `uses: actions/checkout@<sha> # v7.0.1`. Resolve the
+  SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`.
+
 ## Changes and commits
 
 - Record user-visible changes at the top of `Changes` under an unreleased
