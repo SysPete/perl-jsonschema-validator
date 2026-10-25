@@ -19,9 +19,11 @@ aims to add draft 2019-09, draft 2020-12 and OpenAPI 3.1.
   method per keyword, with the same inheritance chain.
 - `URIResolver.pm` (`$ref` / document loading), `JSONPointer.pm`, `Format.pm`
   (`format` checks), `Error.pm` (error objects), `Util.pm` (helpers,
-  JSON/YAML loading).
+  JSON/YAML loading). `Util.pm` is internal, not a public API: its POD says
+  so, and its functions get no POD of their own.
 - `lib/JSONSchema/Validator/schemas/` - bundled meta-schemas.
 - `t/` - tests; fixtures in `t/data/`, shared helper in `t/lib/Helper.pm`.
+- `bench/` - benchmarks and per-machine baselines; see `bench/README.md`.
 
 ## Commands
 
@@ -83,6 +85,8 @@ acceptance run actually executed before citing it.
 - Add a `t/` test for every behaviour change or bug fix. Tests that load
   `Helper` with `detect_warnings` end with a no-warnings check, so keep code
   warning-free.
+- Write each new scenario as a named `subtest`. Don't restructure existing
+  flat tests unless you are changing them for another reason.
 - A failing assertion should show real data: compare error messages,
   instance paths and schema paths, not error counts or array positions, so a
   failure diff says what went wrong.
@@ -117,11 +121,17 @@ acceptance run actually executed before citing it.
 - Pin every GitHub Action to a full commit SHA with the release in a
   comment, never a tag: `uses: actions/checkout@<sha> # v7.0.1`. Resolve the
   SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`.
+- Branch protection requires only the `CI passed` job, which passes only if
+  every job in its `needs` succeeded. A new job that must pass goes in that
+  list. The `history` job fails a branch containing merge commits.
 
 ## Changes and commits
 
 - Record user-visible changes at the top of `Changes` under an unreleased
   entry, in the existing format (checked by `Test::CPAN::Changes`).
 - Commit messages: terse, imperative mood.
+- Bring a branch up to date by rebasing onto `master`, never by merging
+  `master` into it; pull requests are merged with a merge commit. Ask before
+  force-pushing a rebased branch.
 - This is a public repository: no criticism of other projects and no names
   of downstream users in code, POD, commit messages or docs.
