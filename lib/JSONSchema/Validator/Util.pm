@@ -1,6 +1,6 @@
 package JSONSchema::Validator::Util;
 
-# ABSTRACT: Useful functions
+# ABSTRACT: Internal helper functions
 
 use strict;
 use warnings;
@@ -400,3 +400,11 @@ sub data_section {
 }
 
 1;
+
+__END__
+
+=head1 DESCRIPTION
+
+Internal helper functions for the validator classes. This module is not a
+public interface: its functions may change or be removed in any release.
+Use L<JSONSchema::Validator> and the validator classes instead.
