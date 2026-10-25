@@ -73,6 +73,13 @@ sub resolve_uri {
     return $ref unless defined $base && length "$base";
     $base = URI->new("$base");
 
+    # RFC 3986 5.2.2: the empty reference is the base document; URI->abs keeps its fragment
+    if ("$ref" eq '') {
+        my $resolved = $base->clone;
+        $resolved->fragment(undef);
+        return $resolved;
+    }
+
     return $ref->abs($base) if $base->can('authority');
     return $ref if $ref->scheme;
 

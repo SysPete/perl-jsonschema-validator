@@ -53,5 +53,11 @@ subtest 'fragment replaces the fragment of a URN base' => sub {
     }
 };
 
+subtest 'empty reference is the base without its fragment' => sub {
+    is resolve_uri('', 'urn:x:y')->as_string, 'urn:x:y', 'URN base';
+    is resolve_uri('', 'urn:x:y#/a')->as_string, 'urn:x:y', 'URN base with a fragment';
+    is resolve_uri('', 'http://h/a/s.json#/a')->as_string, 'http://h/a/s.json', 'hierarchical base';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
