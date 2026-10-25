@@ -402,7 +402,12 @@ zero-length `minLength`). Synthetic benchmark document and baseline.
 `$vocabulary`, content keywords, meta-schemas. Dialects per schema resource,
 custom meta-schemas, keyword tables. Loading all referenced documents at
 construction. 2019-09 added
-to the acceptance run, with the remaining files as todo.
+to the acceptance run, with the remaining files as todo. A `cases_ok` test
+helper in `t/lib/Helper.pm`: each case a hashref with a `name` and optional
+`setup` and `check`, run as a named subtest through shared test code, with
+no new test dependency. `t/util_numbers.t` moves to it as its first user;
+new table-shaped tests use it, and existing files move only when changed
+for another reason.
 
 **2. Output formats.** Output units with keyword, absolute keyword and
 instance locations; `flag`, `basic` and `detailed` for `Draft201909`.
