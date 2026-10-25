@@ -7,14 +7,17 @@ use warnings;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(is_type serialize unbool);
+use JSONSchema::Validator::Util qw(is_type is_bignum json_equal comparable_numbers);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
 # params: $self, $value, $type, $strict
 sub check_type {
     if ($_[2] eq 'integer') {
-        return is_type($_[1], 'number', $_[3] // $_[0]->strict) && int($_[1]) == $_[1];
+        return 0 unless is_type($_[1], 'number', $_[3] // $_[0]->strict);
+        # the Math::BigFloat bundled with Perl 5.24 and older says int(1.1) == 1.1
+        return $_[1]->is_int ? 1 : 0 if ref $_[1] && is_bignum($_[1]);
+        return int($_[1]) == $_[1];
     }
     return is_type($_[1], $_[2], $_[3] // $_[0]->strict);
 }
@@ -23,7 +26,8 @@ sub exclusiveMaximum {
     my ($self, $instance, $exclusiveMaximum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
 
-    return 1 if $instance < $exclusiveMaximum;
+    my ($x, $max) = comparable_numbers($instance, $exclusiveMaximum);
+    return 1 if $x < $max;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal or greater than ${exclusiveMaximum}",
@@ -37,7 +41,8 @@ sub exclusiveMinimum {
     my ($self, $instance, $exclusiveMinimum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
 
-    return 1 if $instance > $exclusiveMinimum;
+    my ($x, $min) = comparable_numbers($instance, $exclusiveMinimum);
+    return 1 if $x > $min;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal or less than ${exclusiveMinimum}",
@@ -97,27 +102,7 @@ sub contains {
 sub const {
     my ($self, $instance, $const, $schema, $instance_path, $schema_path, $data) = @_;
 
-    my $result = 0;
-
-    # schema must have strict check
-    if ($self->check_type($const, 'boolean', 1)) {
-        $result = $self->check_type($instance, 'boolean')
-                    ? unbool($instance) eq unbool($const)
-                    : 0
-    } elsif ($self->check_type($const, 'object', 1) || $self->check_type($const, 'array', 1)) {
-        $result =   $self->check_type($instance, 'object') ||
-                    $self->check_type($instance, 'array')
-                    ? serialize($instance) eq serialize($const)
-                    : 0;
-    } elsif ($self->check_type($const, 'number', 1)) {
-        $result =   $self->check_type($instance, 'number')
-                    ? $const == $instance
-                    : 0;
-    } elsif (defined $const && defined $instance) {
-        $result = $const eq $instance;
-    } elsif (!defined $const && !defined $instance) {
-        $result = 1;
-    }
+    my $result = $self->strict ? json_equal($instance, $const) : $self->_loose_equal($instance, $const);
 
     return 1 if $result;
 

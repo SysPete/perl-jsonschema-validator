@@ -6,7 +6,7 @@ use Cwd;
 use File::Basename;
 
 our @ISA = 'Exporter';
-our @EXPORT_OK = qw(test_dir detect_warnings);
+our @EXPORT_OK = qw(test_dir detect_warnings errors_text);
 
 my @WARNINGS;
 
@@ -31,6 +31,11 @@ sub catch_warnings {
 
 sub detect_warnings {
     return @WARNINGS;
+}
+
+sub errors_text {
+    my ($errors) = @_;
+    return join "\n", map { @{$_->unwind_to_string_list} } @$errors;
 }
 
 1;

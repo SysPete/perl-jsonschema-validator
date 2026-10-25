@@ -11,7 +11,7 @@ use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Constraints::Draft4;
 use JSONSchema::Validator::URIResolver;
-use JSONSchema::Validator::Util qw(is_type);
+use JSONSchema::Validator::Util qw(is_type resolve_uri exception_message);
 
 use constant SPECIFICATION => 'Draft4';
 use constant ID => 'http://json-schema.org/draft-04/schema#';
@@ -26,6 +26,8 @@ sub create {
     my $using_id_with_ref = $params{using_id_with_ref} // 1;
 
     my $scheme_handlers = $params{scheme_handlers} // {};
+    my $fetch_remote = $params{fetch_remote} // 0;
+    my $documents = $params{documents} // {};
 
     my $self = {
         schema => $schema,
@@ -46,7 +48,9 @@ sub create {
         validator => $self,
         base_uri => $base_uri,
         schema => $schema,
-        scheme_handlers => $scheme_handlers
+        scheme_handlers => $scheme_handlers,
+        fetch_remote => $fetch_remote,
+        documents => $documents
     );
     $self->{resolver} = $resolver;
 
@@ -115,7 +119,7 @@ sub _validate_schema {
     my $id = $schema->{$self->ID_FIELD};
     if ($id && $apply_scope && $self->using_id_with_ref && !$is_exists_ref) {
         my $uri = $id;
-        $uri = URI->new($id)->abs($self->scope)->as_string if $self->scope;
+        $uri = resolve_uri($id, $self->scope)->as_string if $self->scope;
         push @{$self->scopes}, $uri;
     }
 
@@ -134,7 +138,7 @@ sub _validate_schema {
             $self->constraints->$constraint($instance, $v, $schema, $instance_path, $spath, $data);
         };
         push @{$data->{errors}}, error(
-                message => "exception: $@",
+                message => "exception: " . exception_message($@),
                 instance_path => $instance_path,
                 schema_path => $spath
             ) if $@;
@@ -197,6 +201,26 @@ At the moment, the validator can load a resource using the http, https protocols
         ...
     }
     $validator = JSONSchema::Validator::Draft4->new(schema => {...}, scheme_handlers => {ftp => \&loader});
+
+A handler for C<http> or C<https> also allows documents to load over that scheme without C<fetch_remote>.
+
+=head4 fetch_remote
+
+Allow the validator to load C<http> and C<https> references found in the schema. Default value is 0:
+then C<new> croaks on such a reference unless the document is preloaded with C<documents>, a
+C<scheme_handlers> entry covers its scheme, or it is a bundled meta-schema. References with other
+schemes (C<file:>, for example) are not affected.
+
+=head4 documents
+
+Hash reference of URI to schema, to preload documents so references to them resolve without being loaded.
+The URI C<http://example.com/s.json#> is the same entry as C<http://example.com/s.json>.
+C<$id> keys inside each document are indexed as for the root schema.
+
+    $validator = JSONSchema::Validator::Draft4->new(
+        schema => {'$ref' => 'http://example.com/s.json'},
+        documents => {'http://example.com/s.json' => {type => 'integer'}}
+    );
 
 =head1 METHODS
 

@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -97,7 +97,8 @@ sub type {
 sub minimum {
     my ($self, $instance, $minimum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
-    return 1 if $instance >= $minimum;
+    my ($x, $min) = comparable_numbers($instance, $minimum);
+    return 1 if $x >= $min;
     push @{$data->{errors}}, error(
         message => "${instance} is less than ${minimum}",
         instance_path => $instance_path,
@@ -109,7 +110,8 @@ sub minimum {
 sub maximum {
     my ($self, $instance, $maximum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
-    return 1 if $instance <= $maximum;
+    my ($x, $max) = comparable_numbers($instance, $maximum);
+    return 1 if $x <= $max;
     push @{$data->{errors}}, error(
         message => "${instance} is greater than ${maximum}",
         instance_path => $instance_path,
@@ -129,7 +131,8 @@ sub exclusiveMaximum {
     return 0 unless $res;
 
     return 1 unless $exclusiveMaximum;
-    return 1 if $instance != $maximum;
+    my ($x, $max) = comparable_numbers($instance, $maximum);
+    return 1 if $x != $max;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal to ${maximum}",
@@ -150,7 +153,8 @@ sub exclusiveMinimum {
     return 0 unless $res;
 
     return 1 unless $exclusiveMinimum;
-    return 1 if $instance != $minimum;
+    my ($x, $min) = comparable_numbers($instance, $minimum);
+    return 1 if $x != $min;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal to ${minimum}",
@@ -417,27 +421,7 @@ sub enum {
 
     my $result = 0;
     for my $e (@$enum) {
-        # schema must have strict check
-        if ($self->check_type($e, 'boolean', 1)) {
-            $result = $self->check_type($instance, 'boolean')
-                        ? unbool($instance) eq unbool($e)
-                        : 0
-        } elsif ($self->check_type($e, 'object', 1) || $self->check_type($e, 'array', 1)) {
-            $result =   $self->check_type($instance, 'object') ||
-                        $self->check_type($instance, 'array')
-                        ? serialize($instance) eq serialize($e)
-                        : 0;
-        } elsif ($self->check_type($e, 'number', 1)) {
-            $result =   $self->check_type($instance, 'number')
-                        ? $e == $instance
-                        : 0;
-        } elsif (defined $e && defined $instance) {
-            $result = $e eq $instance;
-        } elsif (!defined $e && !defined $instance) {
-            $result = 1;
-        } else {
-            $result = 0;
-        }
+        $result = $self->strict ? json_equal($instance, $e) : $self->_loose_equal($instance, $e);
         last if $result;
     }
 
@@ -448,6 +432,31 @@ sub enum {
         instance_path => $instance_path,
         schema_path => $schema_path
     );
+    return 0;
+}
+
+sub _loose_equal {
+    my ($self, $instance, $e) = @_;
+
+    # schema must have strict check
+    if ($self->check_type($e, 'boolean', 1)) {
+        return $self->check_type($instance, 'boolean')
+                    ? unbool($instance) eq unbool($e)
+                    : 0
+    } elsif ($self->check_type($e, 'object', 1) || $self->check_type($e, 'array', 1)) {
+        return  $self->check_type($instance, 'object') ||
+                $self->check_type($instance, 'array')
+                    ? serialize($instance) eq serialize($e)
+                    : 0;
+    } elsif ($self->check_type($e, 'number', 1)) {
+        return  $self->check_type($instance, 'number')
+                    ? $e == $instance
+                    : 0;
+    } elsif (defined $e && defined $instance) {
+        return $e eq $instance;
+    } elsif (!defined $e && !defined $instance) {
+        return 1;
+    }
     return 0;
 }
 
@@ -528,8 +537,15 @@ sub multipleOf {
 
     my $result = 1;
 
-    my $div = $instance / $multipleOf;
-    $result = 0 if $div == 'Inf' || int($div) != $div;
+    if (is_bignum($instance) || is_bignum($multipleOf)) {
+        my ($x, $m) = comparable_numbers($instance, $multipleOf);
+        # bdiv rounds to 40 digits, so a huge quotient can look whole; bmod is exact.
+        # babs because the Math::BigFloat bundled with Perl 5.24 and older gets bmod wrong for mixed signs.
+        $result = $x->babs->bmod($m->babs)->is_zero ? 1 : 0;
+    } else {
+        my $div = $instance / $multipleOf;
+        $result = 0 if $div == 'Inf' || int($div) != $div;
+    }
 
     return 1 if $result;
 
@@ -635,6 +651,8 @@ sub uniqueItems {
     # uniqueItems is boolean
     return 1 unless $uniqueItems;
 
+    return $self->_unique_items_strict($instance, $instance_path, $schema_path, $data) if $self->strict;
+
     my %hash = map {
         my $type = detect_type($_, $self->strict);
 
@@ -662,12 +680,28 @@ sub uniqueItems {
     return 0;
 }
 
+sub _unique_items_strict {
+    my ($self, $instance, $instance_path, $schema_path, $data) = @_;
+
+    for my $i (0 .. $#$instance - 1) {
+        for my $j ($i + 1 .. $#$instance) {
+            next unless json_equal($instance->[$i], $instance->[$j]);
+            push @{$data->{errors}}, error(
+                message => "instance has non-unique elements",
+                instance_path => $instance_path,
+                schema_path => $schema_path
+            );
+            return 0;
+        }
+    }
+    return 1;
+}
+
 sub ref {
     my ($self, $instance, $ref, $origin_schema, $instance_path, $schema_path, $data) = @_;
 
     my $scope = $self->validator->scope;
-    $ref = URI->new($ref);
-    $ref = $ref->abs($scope) if $scope;
+    $ref = resolve_uri($ref, $scope);
 
     my ($current_scope, $schema) = $self->validator->resolver->resolve($ref);
 
@@ -682,7 +716,7 @@ sub ref {
     if ($@) {
         $result = 0;
         push @{$data->{errors}}, error(
-            message => "exception: $@",
+            message => "exception: " . exception_message($@),
             instance_path => $instance_path,
             schema_path => $schema_path
         );

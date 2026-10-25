@@ -1,6 +1,6 @@
 package JSONSchema::Validator::Util;
 
-# ABSTRACT: Useful functions
+# ABSTRACT: Internal helper functions
 
 use strict;
 use warnings;
@@ -15,8 +15,8 @@ use URI 1.00 ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type
-    data_section load_schema
+    round is_type detect_type is_bignum json_equal comparable_numbers
+    data_section load_schema resolve_uri exception_message
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -63,6 +63,25 @@ BEGIN {
     my $json = $json_class->new->canonical(1)->utf8;
     *json_encode = sub { $json->encode(@_); };
     *json_decode = sub { $json->decode(@_); };
+}
+
+# URI->abs dies on a base without an authority, such as urn:uuid:...
+sub resolve_uri {
+    my ($ref, $base) = @_;
+
+    $ref = URI->new("$ref");
+    return $ref unless defined $base && length "$base";
+    $base = URI->new("$base");
+
+    return $ref->abs($base) if $base->can('authority');
+    return $ref if $ref->scheme;
+
+    if ("$ref" =~ /\A#(.*)\z/s) {
+        my $resolved = $base->clone;
+        $resolved->fragment($1);
+        return $resolved;
+    }
+    croak qq{cannot resolve relative reference "$ref" against non-hierarchical base "$base"};
 }
 
 sub unbool {
@@ -242,9 +261,80 @@ sub is_bool {
     return 0;
 }
 
+sub is_bignum {
+    return 0 unless blessed($_[0]);
+    return $_[0]->isa('Math::BigInt') || $_[0]->isa('Math::BigFloat') ? 1 : 0;
+}
+
+sub comparable_numbers {
+    my ($x, $y) = @_;
+    return ($x, $y) unless (ref $x && is_bignum($x)) || (ref $y && is_bignum($y));
+    require Math::BigFloat;
+    return map { Math::BigFloat->new(_exact_number_string($_)) } $x, $y;
+}
+
+sub _exact_number_string {
+    my ($n) = @_;
+    return "$n" if ref $n || int($n) != $n || abs($n) == 9**9**9;
+
+    # Perl stringifies a float to 15 significant digits, and older Windows C libraries
+    # pad %.0f with zeros after 17, so halve (exact for a float) below 2**53 and shift back.
+    my ($sign, $m, $shift) = ($n < 0 ? '-' : '', abs $n, 0);
+    while ($m >= 2**53) { $m /= 2; $shift++ }
+    return $sign . sprintf('%.0f', $m) unless $shift;
+
+    require Math::BigInt;
+    return $sign . Math::BigInt->new(sprintf('%.0f', $m))->blsft($shift)->bstr;
+}
+
+sub json_equal {
+    my ($x, $y) = @_;
+
+    return defined $y ? 0 : 1 unless defined $x;
+    return 0 unless defined $y;
+
+    # strict booleans are always references, so two plain scalars are numbers or strings
+    if (!ref $x && !ref $y) {
+        my $x_is_number = is_number($x, 1);
+        return 0 unless $x_is_number == is_number($y, 1);
+        return ($x_is_number ? $x == $y : $x eq $y) ? 1 : 0;
+    }
+
+    if (is_bool($x, 1) || is_bool($y, 1)) {
+        return 0 unless is_bool($x, 1) && is_bool($y, 1);
+        return ($x ? 1 : 0) == ($y ? 1 : 0) ? 1 : 0;
+    }
+
+    if (is_number($x, 1) || is_number($y, 1)) {
+        return 0 unless is_number($x, 1) && is_number($y, 1);
+        my ($nx, $ny) = comparable_numbers($x, $y);
+        return $nx == $ny ? 1 : 0;
+    }
+
+    if (is_array($x) || is_array($y)) {
+        return 0 unless is_array($x) && is_array($y) && @$x == @$y;
+        for my $i (0 .. $#$x) {
+            return 0 unless json_equal($x->[$i], $y->[$i]);
+        }
+        return 1;
+    }
+
+    if (is_object($x) || is_object($y)) {
+        return 0 unless is_object($x) && is_object($y) && keys %$x == keys %$y;
+        for my $key (keys %$x) {
+            return 0 unless exists $y->{$key} && json_equal($x->{$key}, $y->{$key});
+        }
+        return 1;
+    }
+
+    return 0 unless is_string($x, 1) && is_string($y, 1);
+    return $x eq $y ? 1 : 0;
+}
+
 # params: $value, $is_strict
 sub is_integer {
     return 1 if B::svref_2object(\$_[0])->FLAGS & B::SVf_IOK();
+    return $_[0]->is_int ? 1 : 0 if ref $_[0] && is_bignum($_[0]);
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
     return 1 if looks_like_number($_[0]) && int($_[0]) == $_[0];
@@ -254,6 +344,7 @@ sub is_integer {
 # params: $value, $is_strict
 sub is_number {
     return 1 if B::svref_2object(\$_[0])->FLAGS & (B::SVf_IOK() | B::SVf_NOK());
+    return 1 if ref $_[0] && is_bignum($_[0]);
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
     return 1 if looks_like_number($_[0]);
@@ -267,6 +358,7 @@ sub is_ref {
     return 0 if $ref eq 'JSON::PP::Boolean' ||
                 $ref eq 'HASH' ||
                 $ref eq 'ARRAY';
+    return 0 if is_bignum($_[0]);
     return 1;
 }
 
@@ -286,6 +378,15 @@ sub is_string {
     return !(ref $_[0]) && defined $_[0];
 }
 
+# Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
+sub exception_message {
+    my ($message) = @_;
+    $message =~ s/ at (?:(?! at ).)*?(?:\.(?:pm|pl|t)|\(eval \d+\)|-e) line \d+\.?//g;
+    $message =~ s/\s+/ /g;
+    $message =~ s/\A | \z//g;
+    return $message;
+}
+
 sub data_section {
     my $class = shift;
     my $handle = do { no strict 'refs'; \*{"${class}::DATA"} };
@@ -299,3 +400,11 @@ sub data_section {
 }
 
 1;
+
+__END__
+
+=head1 DESCRIPTION
+
+Internal helper functions for the validator classes. This module is not a
+public interface: its functions may change or be removed in any release.
+Use L<JSONSchema::Validator> and the validator classes instead.

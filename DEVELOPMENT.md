@@ -1,8 +1,9 @@
 # INSTALL DEPENDENCIES
 
     cpanm --installdeps --with-develop .        # module dependencies
-    cpanm Test::JSON::Schema::Acceptance        # to test t/acceptance.t
-    cpanm LWP::UserAgent                        # for now, need for some tests in t/acceptance.t
+    cpm install -L local Test::JSON::Schema::Acceptance@1.040 YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+                                                # developer modules, kept out of the system perl
+    PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t
     cpanm Dist::Zilla                           # to build and upload module to cpan
     dzil authordeps --missing | cpanm           # to install dzil dependencies
     cpanm Pod::Weaver::Section::Contributors    # to automatically maintain the list of contributors

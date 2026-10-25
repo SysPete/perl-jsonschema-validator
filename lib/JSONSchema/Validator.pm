@@ -12,6 +12,7 @@ use JSONSchema::Validator::Draft4;
 use JSONSchema::Validator::Draft6;
 use JSONSchema::Validator::Draft7;
 use JSONSchema::Validator::OAS30;
+use JSONSchema::Validator::BundledSchemas qw( read_bundled_schema );
 use JSONSchema::Validator::Util qw( load_schema );
 
 our $VERSION = '0.011';
@@ -42,7 +43,7 @@ Parameters:
 
 =over 1
 
-=item resources
+=item resource
 
 To get schema by uri
 
@@ -64,8 +65,18 @@ To specify base uri of schema.
 This parameter used to build absolute path by relative reference in schema.
 By default C<base_uri> is equal to the resource path if the resource parameter is specified otherwise the C<$id> key in the schema.
 
+=item fetch_remote
+
+Allow loading C<http> and C<https> references found in the schema. Default value is 0, and C<new>
+croaks on such a reference unless C<documents> or C<scheme_handlers> covers it.
+
+=item documents
+
+Hash reference of URI to schema, preloaded so references to those URIs need no loading.
+
 =back
 
+Both options are passed to the validator class; see L<JSONSchema::Validator::Draft4>.
 Additional parameters need to be looked at in a specific validator class.
 Currently there are validators: JSONSchema::Validator::Draft4, JSONSchema::Validator::Draft6, JSONSchema::Validator::Draft7, JSONSchema::Validator::OAS30.
 
@@ -160,9 +171,7 @@ sub validate_resource_schema {
 }
 
 sub read_specification {
-    my $filename = shift;
-    my $schema_filepath = URI::file->new_abs((__FILE__ =~ s/\.pm$//r) . '/schemas/' . lc($filename) . '.json');
-    return load_schema($schema_filepath);
+    return read_bundled_schema(shift);
 }
 
 sub find_validator {
@@ -271,14 +280,8 @@ schema and use the C<schema> argument, this is something to be aware of.
 
 =head2 allow_bignum => 1
 
-The C<allow_bignum => 1> setting (available on L<JSON::XS> and
-L<Cpanel::JSON::XS>) on deserializers is not supported.
-
-When deserializing a request body with a JSON parser configured with
-C<allow_bignum => 1>, floats - even ones which fit into the regular
-float ranges - will be deserialized as C<Math::BigFloat>. Similarly,
-integers outside of the internal integer range are deserialized as
-C<Math::BigInt>. Numbers represented as C<Math::Big*> objects are not
-recognized as actual numbers and will fail validation.
+C<Math::BigInt> and C<Math::BigFloat> values, which deserializers such as
+L<JSON::XS> and L<Cpanel::JSON::XS> produce with C<< allow_bignum => 1 >>, are
+validated as numbers, with exact comparisons and C<multipleOf>.
 
 =cut

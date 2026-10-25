@@ -2,26 +2,94 @@ name: test
 on: ['push', 'pull_request']
 jobs:
   test:
-    name: Perl ${{ matrix.perl }} on os ${{ matrix.os }}
+    name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        perl: ['5.16','5.18','5.20','5.22','5.30','5.32','5.34','5.36']
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
+        perl: ['5.20', '5.22', '5.24', '5.26', '5.28', '5.30', '5.32', '5.34', '5.36', '5.38', '5.40', '5.42', 'latest']
+        include:
+          - { os: macos-latest, perl: '5.20' }
+          - { os: macos-latest, perl: 'latest' }
+          - { os: windows-latest, perl: '5.20' }
+          - { os: windows-latest, perl: 'latest' }
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up perl
-        uses: shogo82148/actions-setup-perl@v1
+        uses: shogo82148/actions-setup-perl@3b59bd33efdae98406a9bc4b75a4aa041e11993a # v1.44.4
         with:
           perl-version: ${{ matrix.perl }}
       - name: Show perl version
         run: perl -V
-      - name: Install specific dependencies
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.perl >= '5.20' }}
-        run: cpanm -n Test::JSON::Schema::Acceptance LWP::UserAgent
+      - name: Install optional dependencies
+        run: cpanm -n YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+      # Not on Windows: its dependencies won't build for Perl 5.20 there, and
+      # some of them (autovivification, namespace::clean) crash Perl 5.44.
+      # Linux and macOS run the official suite instead.
+      - name: Install acceptance harness
+        if: matrix.os != 'windows-latest'
+        run: cpanm -n Test::JSON::Schema::Acceptance@1.040
       - name: Install common dependencies
         run: cpanm -n --installdeps .
       - name: Run tests
-        run: prove -lvr t
+        run: prove -lr t
+        env:
+          ACCEPTANCE_TESTING: ${{ matrix.os != 'windows-latest' && '1' || '' }}
+
+  acceptance-latest:
+    name: Acceptance suite, newest release
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@3b59bd33efdae98406a9bc4b75a4aa041e11993a # v1.44.4
+        with:
+          perl-version: latest
+      - name: Install dependencies
+        run: |
+          cpanm -n Test::JSON::Schema::Acceptance YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+          cpanm -n --installdeps .
+      - name: Run acceptance tests
+        run: prove -l t/acceptance.t
         env:
           ACCEPTANCE_TESTING: 1
+
+  # master only takes branches rebased onto it, merged with a merge commit;
+  # "branch up to date" can't tell a rebase from merging master in.
+  history:
+    name: Branch history has no merge commits
+    runs-on: ubuntu-latest
+    steps:
+      # A pull_request run checks out a test merge with the base, so check out the branch itself.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Check for merge commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+        run: |
+          merges=$(git rev-list --merges "$BASE..HEAD")
+          if [ -n "$merges" ]; then
+              echo "::error::Rebase onto the base branch instead of merging it in. Merge commits:"
+              git log --oneline --no-walk $merges
+              exit 1
+          fi
+
+  # The one check branch protection requires, so the matrix can change freely.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [test, history]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+              [ "$result" = success ] || exit 1
+          done

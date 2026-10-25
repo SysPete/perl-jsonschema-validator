@@ -5,6 +5,7 @@ package JSONSchema::Validator::JSONPointer;
 use strict;
 use warnings;
 use URI;
+use JSONSchema::Validator::Util 'resolve_uri';
 use Carp 'croak';
 
 use Scalar::Util 'weaken';
@@ -79,8 +80,7 @@ sub xget {
     my $current_value = $self->value;
 
     while (ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
-        my $ref = URI->new($current_value->{'$ref'});
-        $ref = $ref->abs($current_scope) if $current_scope;
+        my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
         ($current_scope, $current_value) = $self->validator->resolver->resolve($ref);
     }
 
@@ -88,7 +88,7 @@ sub xget {
         my $id = $current_value->{$self->validator->ID_FIELD};
         if ($id && !ref $id) {
             $current_scope = $current_scope
-                ? URI->new($id)->abs($current_scope)->as_string
+                ? resolve_uri($id, $current_scope)->as_string
                 : $id;
         }
     }
@@ -104,8 +104,7 @@ sub xget {
         }
 
         while (ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
-            my $ref = URI->new($current_value->{'$ref'});
-            $ref = $ref->abs($current_scope) if $current_scope;
+            my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
             ($current_scope, $current_value) = $self->validator->resolver->resolve($ref);
         }
 
@@ -113,7 +112,7 @@ sub xget {
             my $id = $current_value->{$self->validator->ID_FIELD};
             if ($id && !ref $id) {
                 $current_scope = $current_scope
-                    ? URI->new($id)->abs($current_scope)->as_string
+                    ? resolve_uri($id, $current_scope)->as_string
                     : $id;
             }
         }

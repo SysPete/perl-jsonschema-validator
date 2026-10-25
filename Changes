@@ -1,5 +1,26 @@
 Revision history for JSONSchema-Validator
 
+0.012  Not Released
+    - INCOMPATIBLE: http/https references are no longer fetched by default,
+      and new() now croaks on a schema containing one. To upgrade, either
+      pass fetch_remote => 1 to restore the old behaviour, or preload the
+      referenced schemas with the new documents option:
+        JSONSchema::Validator->new(schema => $schema,
+            documents => { 'https://example.com/s.json' => $s });
+      A scheme_handlers entry for http or https also allows that scheme.
+      The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas need neither.
+    - Error messages for exceptions raised during validation no longer
+      include the source file and line ("at .../Foo.pm line 12.")
+    - References resolve against URN base URIs (urn:uuid:...) instead of
+      dying; a relative path against such a base is a validation error
+    - The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas resolve by their
+      canonical id without fetching them
+    - Minimum Perl version is now 5.20
+    - Numbers decoded as Math::BigInt / Math::BigFloat are validated
+      as numbers; enum, const and uniqueItems compare numbers numerically
+    - JSONSchema::Validator::Util is documented as internal; its functions
+      are not a public interface and may change
+
 0.011  2022-08-24
     - Added checking params from schema
     - Fixed incorrectly handle array parameters

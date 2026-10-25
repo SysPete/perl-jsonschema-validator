@@ -13,7 +13,8 @@ use URI::Escape;
 use Encode;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw( load_schema );
+use JSONSchema::Validator::BundledSchemas 'bundled_schema';
+use JSONSchema::Validator::Util qw( load_schema resolve_uri );
 
 # what keys contain the schema? Required to find an $id in a schema
 my $SEARCH_ID = {
@@ -42,6 +43,9 @@ my $SEARCH_ID = {
     }
 };
 
+# keywords whose values are instances, not schemas: a "$ref" inside one is data
+my %DATA_KEYWORDS = map { $_ => 1 } qw(enum const default examples example);
+
 sub new {
     my ($class, %params) = @_;
 
@@ -53,6 +57,8 @@ sub new {
     my $base_uri    = $params{base_uri} // '';
 
     my $scheme_handlers     = $params{scheme_handlers} // {};
+    my $fetch_remote        = $params{fetch_remote} // 0;
+    my $documents           = $params{documents} // {};
 
     weaken($validator);
 
@@ -61,24 +67,45 @@ sub new {
         cache => {
             $base_uri => $schema
         },
-        scheme_handlers => $scheme_handlers
+        scheme_handlers => $scheme_handlers,
+        fetch_remote => $fetch_remote
     };
 
     bless $self, $class;
 
-    if ('#' eq substr $base_uri, -1) {
-        $base_uri = substr $base_uri, 0, - 1;
-        $self->{cache}{$base_uri} = $schema;
-    }
+    $base_uri = $self->_add_document($base_uri, $schema);
 
     $self->cache_id(URI->new($base_uri), $schema) if $validator->using_id_with_ref && ref $schema eq 'HASH';
+
+    for my $document_uri (keys %$documents) {
+        my $document = $documents->{$document_uri};
+        my $key = $self->_add_document($document_uri, $document);
+        $self->cache_id(URI->new($key), $document) if $validator->using_id_with_ref && ref $document eq 'HASH';
+    }
+
+    # fail now, not when some later instance reaches the reference
+    unless ($fetch_remote) {
+        $self->_check_remote_refs($schema, $base_uri);
+        $self->_check_remote_refs($documents->{$_}, $_) for keys %$documents;
+    }
 
     return $self;
 }
 
 sub validator { shift->{validator} }
 sub scheme_handlers { shift->{scheme_handlers} }
+sub fetch_remote { shift->{fetch_remote} }
 sub cache { shift->{cache} }
+
+# Caches the schema under the uri without an empty fragment; returns that key.
+sub _add_document {
+    my ($self, $uri, $schema) = @_;
+
+    $uri = substr $uri, 0, -1 if '#' eq substr $uri, -1;
+    $self->{cache}{$uri} = $schema;
+
+    return $uri;
+}
 
 # self - URIResolver
 # origin_uri - URI
@@ -105,13 +132,73 @@ sub cache_resolve {
 
     return $self->cache->{$uri->as_string} if exists $self->cache->{$uri->as_string};
 
-    my $schema = load_schema($uri->as_string, $self->scheme_handlers);
+    my $schema = bundled_schema($uri->as_string);
+
+    if (!defined $schema) {
+        my $is_web = $scheme && ($scheme eq 'http' || $scheme eq 'https');
+
+        # A handler for the scheme is the caller opting in to it.
+        _croak_remote_disabled($uri) if $is_web && !$self->fetch_remote && !exists $self->scheme_handlers->{$scheme};
+
+        $schema = load_schema($uri->as_string, $self->scheme_handlers);
+    }
 
     $self->cache->{$uri->as_string} = $schema;
 
     $self->cache_id($uri, $schema) if $self->validator->using_id_with_ref;
 
     return $schema;
+}
+
+sub _croak_remote_disabled {
+    my ($uri) = @_;
+    croak sprintf('Remote fetching is disabled: cannot load %s. Preload it with "documents" or pass fetch_remote => 1',
+        $uri->as_string);
+}
+
+# Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
+sub _check_remote_refs {
+    my ($self, $data, $scope) = @_;
+
+    if (ref $data eq 'ARRAY') {
+        $self->_check_remote_refs($_, $scope) for @$data;
+        return;
+    }
+    return unless ref $data eq 'HASH';
+
+    # siblings of $ref are ignored (draft 4-7, OpenAPI 3.0), so are not searched
+    if (exists $data->{'$ref'}) {
+        $self->_check_remote_ref($data->{'$ref'}, $scope) unless ref $data->{'$ref'};
+        return;
+    }
+
+    my $id = $data->{$self->validator->ID_FIELD};
+    if ($self->validator->using_id_with_ref && defined $id && !ref $id) {
+        $scope = eval { resolve_uri($id, $scope)->as_string } // $scope;
+    }
+
+    for my $key (keys %$data) {
+        next if $DATA_KEYWORDS{$key} || $key =~ /^x-/;
+        $self->_check_remote_refs($data->{$key}, $scope);
+    }
+}
+
+sub _check_remote_ref {
+    my ($self, $ref, $scope) = @_;
+
+    # a reference that can't be resolved at all is reported by validation
+    my $uri = eval { resolve_uri($ref, $scope) } or return;
+    my $scheme = $uri->scheme // '';
+    return unless $scheme eq 'http' || $scheme eq 'https';
+    return if exists $self->scheme_handlers->{$scheme};
+
+    my $document = $uri->clone;
+    $document->fragment(undef);
+    return if exists $self->cache->{$uri->as_string}
+           || exists $self->cache->{$document->as_string}
+           || defined bundled_schema($document->as_string);
+
+    _croak_remote_disabled($document);
 }
 
 # self - URIResolver
@@ -165,10 +252,7 @@ sub cache_id_dfs {
     return if exists $schema->{'$ref'};
 
     if (exists $schema->{$self->validator->ID_FIELD} && !ref $schema->{$self->validator->ID_FIELD}) {
-        my $id = URI->new($schema->{$self->validator->ID_FIELD});
-        my $scope = $scopes->[-1];
-
-        $id = ($scope && $scope->as_string) ? $id->abs($scope) : $id;
+        my $id = resolve_uri($schema->{$self->validator->ID_FIELD}, $scopes->[-1]);
 
         $self->cache->{$id->as_string} = $schema;
         push @$scopes, $id;

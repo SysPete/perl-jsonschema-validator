@@ -14,7 +14,7 @@ requires "URI" => "1.00";
 requires "constant" => "0";
 requires "overload" => "0";
 requires "parent" => "0";
-requires "perl" => "v5.16.0";
+requires "perl" => "v5.20.0";
 requires "re" => "0";
 requires "strict" => "0";
 requires "version" => "0";
@@ -27,7 +27,7 @@ on 'test' => sub {
   requires "IPC::Open3" => "0";
   requires "Test::More" => "0";
   requires "lib" => "0";
-  requires "perl" => "v5.16.0";
+  requires "perl" => "v5.20.0";
   requires "utf8" => "0";
 };
 
@@ -37,6 +37,7 @@ on 'configure' => sub {
 
 on 'develop' => sub {
   requires "Test::CPAN::Changes" => "0.19";
+  requires "Test::JSON::Schema::Acceptance" => "1.040";
   requires "Test::Perl::Critic" => "0";
   requires "Test::Spelling" => "0.12";
 };
