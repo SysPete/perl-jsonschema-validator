@@ -33,6 +33,9 @@ ok json_equal(Math::BigInt->new(5), 5.0), 'BigInt 5 equals 5.0';
 ok !json_equal(Math::BigInt->new(4), 4.5), 'BigInt 4 is not 4.5';
 ok json_equal($big, 2**70), 'BigInt 2**70 equals the float 2**70';
 ok !json_equal($big + 1, 2**70), 'BigInt 2**70+1 is not the float 2**70';
+ok json_equal(-$big, -(2**70)), 'BigInt -2**70 equals the float -2**70';
+ok json_equal(Math::BigInt->new(3)->blsft(1000), 3 * 2**1000), 'BigInt 3*2**1000 equals the float';
+ok !json_equal(Math::BigInt->new(9**9**9), 2**70), 'BigInt inf is not 2**70';
 
 my $v = JSONSchema::Validator->new(specification => 'Draft7',
     schema => { type => 'integer', maximum => Math::BigInt->new(2)->bpow(70) });

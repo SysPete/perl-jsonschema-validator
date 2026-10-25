@@ -275,9 +275,16 @@ sub comparable_numbers {
 
 sub _exact_number_string {
     my ($n) = @_;
-    return "$n" if ref $n || int($n) != $n;
-    # Perl stringifies a float to 15 significant digits; an integral float prints exactly with %.0f.
-    return sprintf('%.0f', $n);
+    return "$n" if ref $n || int($n) != $n || abs($n) == 9**9**9;
+
+    # Perl stringifies a float to 15 significant digits, and older Windows C libraries
+    # pad %.0f with zeros after 17, so halve (exact for a float) below 2**53 and shift back.
+    my ($sign, $m, $shift) = ($n < 0 ? '-' : '', abs $n, 0);
+    while ($m >= 2**53) { $m /= 2; $shift++ }
+    return $sign . sprintf('%.0f', $m) unless $shift;
+
+    require Math::BigInt;
+    return $sign . Math::BigInt->new(sprintf('%.0f', $m))->blsft($shift)->bstr;
 }
 
 sub json_equal {
