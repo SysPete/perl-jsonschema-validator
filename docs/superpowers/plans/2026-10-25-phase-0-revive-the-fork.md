@@ -81,7 +81,7 @@ Dist::Zilla (release only), GitHub Actions with shogo82148/actions-setup-perl.
 - Produces: `local/` as the developer module directory; CI that sets
   `ACCEPTANCE_TESTING=1` and installs the optional modules.
 
-- [ ] **Step 1: Raise the Perl floor**
+- [x] **Step 1: Raise the Perl floor**
 
 `dist.ini` `[Prereqs]`: `perl = v5.20`. `cpanfile` (kept in step with what
 `dzil build` writes): both `requires "perl" => "v5.16.0";` become
@@ -90,13 +90,13 @@ Dist::Zilla (release only), GitHub Actions with shogo82148/actions-setup-perl.
 `dist.ini` as `[Prereqs / DevelopRequires]` with
 `Test::JSON::Schema::Acceptance = 1.040`.
 
-- [ ] **Step 2: Keep non-distribution directories out of the tarball**
+- [x] **Step 2: Keep non-distribution directories out of the tarball**
 
 `dist.ini` `[GatherDir]`: add `exclude_match = ^docs/`,
 `exclude_match = ^bench/`, `exclude_match = ^local/`. `.gitignore`: add
 `local/`.
 
-- [ ] **Step 3: Rewrite the CI workflow**
+- [x] **Step 3: Rewrite the CI workflow**
 
 `.github/workflows/tests.yml`:
 - `actions/checkout@v4`, `shogo82148/actions-setup-perl@v1`.
@@ -113,7 +113,7 @@ Dist::Zilla (release only), GitHub Actions with shogo82148/actions-setup-perl.
   `prove -l t/acceptance.t`, with `continue-on-error: true` so it reports new
   suite tests without blocking the build.
 
-- [ ] **Step 4: Update `DEVELOPMENT.md` and `Changes`**
+- [x] **Step 4: Update `DEVELOPMENT.md` and `Changes`**
 
 `DEVELOPMENT.md` "INSTALL DEPENDENCIES": replace the acceptance and
 LWP::UserAgent lines with the `cpm install -L local ...` line and
@@ -125,13 +125,13 @@ LWP::UserAgent lines with the `cpm install -L local ...` line and
     - Minimum Perl version is now 5.20
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `prove -lr t`
 Expected: `All tests successful.` (acceptance skipped without
 `ACCEPTANCE_TESTING`).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add dist.ini cpanfile .gitignore .github/workflows/tests.yml DEVELOPMENT.md Changes
@@ -150,7 +150,7 @@ git commit -m "Require Perl 5.20 and modernise CI"
   without any `todo_tests`. It fails until Task 4 is done; that is expected on
   this branch, which merges as a whole.
 
-- [ ] **Step 1: Point the harness at Test::JSON::Schema::Acceptance 1.040**
+- [x] **Step 1: Point the harness at Test::JSON::Schema::Acceptance 1.040**
 
 Construct with `specification => $specification, include_optional => 0`
 (optional tests belong to a later phase). Remove the old `nvsize`
@@ -163,7 +163,7 @@ binmode Test::More->builder->$_, ':encoding(UTF-8)'
     for qw(output failure_output todo_output);
 ```
 
-- [ ] **Step 2: Run it and confirm the known failures**
+- [x] **Step 2: Run it and confirm the known failures**
 
 Run: `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: FAIL. The summary tables show 18 failures for draft4 and 28 each
@@ -179,7 +179,7 @@ Two causes: numbers arrive as `Math::BigFloat` (Task 3) and URN base URIs
 (Task 4, the five `ref.json` groups whose names start with "simple URN base
 URI" or "URN base URI", draft6 and draft7 only).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Put the per-draft failure counts from Step 2 in the commit body.
 
@@ -221,7 +221,7 @@ blessed value, so `detect_type` reports `_ref` and numeric keywords skip it.
   newlines, so nested `context` messages are matched too (stringifying an
   `Error` shows only its top message).
 
-- [ ] **Step 1: Write the failing unit tests** in `t/util_numbers.t`
+- [x] **Step 1: Write the failing unit tests** in `t/util_numbers.t`
 
 ```perl
 use Math::BigInt; use Math::BigFloat; use JSON::PP;
@@ -282,13 +282,13 @@ task must not change: a query parameter `"1"` against
 `{type: boolean, enum: [true]}` is valid (both through `validate_request`).
 These pass before the change too; they guard Step 3.
 
-- [ ] **Step 2: Run both**
+- [x] **Step 2: Run both**
 
 Run: `prove -l t/util_numbers.t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: both FAIL (detect_type returns `_ref`; acceptance still shows the 74 failures from Task 2).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `Util.pm`: `is_ref` returns 0 for `is_bignum` values; `is_number` returns
 1 for them; `is_integer` returns 1 for `Math::BigInt` and for a
@@ -303,18 +303,18 @@ code. `Validator.pm` POD: replace the `allow_bignum => 1` section's "not
 supported" text with: `Math::BigInt` and `Math::BigFloat` values are validated
 as numbers, with exact comparisons and `multipleOf`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `prove -lr t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: `t/util_numbers.t` and the rest of `t/` PASS. `t/acceptance.t` still FAILS, but only in `ref.json` for draft6 and draft7, and only in the five URN groups named in Task 2 (2 per draft are deaths, the rest wrong results); draft4 has no failures.
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 With the tests green, tidy what this task wrote: the type checks in `is_number`/`is_integer`/`is_ref` share one bignum test (`is_bignum`), not three copies; `json_equal` is the only deep comparison - remove any serialise-and-compare left in the strict path. Re-run the Step 4
 commands; they must still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/JSONSchema/Validator/Util.pm lib/JSONSchema/Validator/Constraints/Draft4.pm \
@@ -350,7 +350,7 @@ locate object method "authority" via package "URI::urn"`.
   else croaks `cannot resolve relative reference "$ref" against
   non-hierarchical base "$base"`.
 
-- [ ] **Step 1: Write the failing unit tests** in `t/util_resolve_uri.t`
+- [x] **Step 1: Write the failing unit tests** in `t/util_resolve_uri.t`
 
 ```perl
 is resolve_uri('#/a', 'urn:uuid:deadbeef-1234-ffff-ffff-4321feebdaed')->as_string,
@@ -375,27 +375,27 @@ unlike errors_text($e), qr/authority/, 'no URI::urn death';
 like errors_text($e), qr/cannot resolve relative reference/, 'says why';
 ```
 
-- [ ] **Step 2: Run both**
+- [x] **Step 2: Run both**
 
 Run: `prove -l t/util_resolve_uri.t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: FAIL (`resolve_uri` undefined; the URN groups still fail).
 
-- [ ] **Step 3: Implement `resolve_uri` and use it at every call site listed**
+- [x] **Step 3: Implement `resolve_uri` and use it at every call site listed**
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `prove -lr t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: PASS, acceptance summary `fail` column 0 for draft4, draft6 and
 draft7.
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 With the tests green, tidy what this task wrote: no `->abs(` remains outside `resolve_uri` (`git grep -n -- '->abs(' lib` shows only Util.pm); the eight call sites read the same way. Re-run the Step 4
 commands; they must still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib t/util_resolve_uri.t Changes
@@ -424,7 +424,7 @@ git commit -m "Resolve references against URN base URIs"
 - `URIResolver::cache_resolve` consults `bundled_schema` after its own cache
   and before `scheme_handlers` or any loading.
 
-- [ ] **Step 1: Write the failing test** in `t/bundled_schemas.t`
+- [x] **Step 1: Write the failing test** in `t/bundled_schemas.t`
 
 ```perl
 my $fail = sub { die "network used for $_[0]\n" };
@@ -445,27 +445,27 @@ ok !defined bundled_schema('http://example.com/nope'), 'unknown id';
 
 plus the same `type => 12` check for draft-04 and draft-06 ids.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `prove -l t/bundled_schemas.t`
 Expected: FAIL - the "valid schema" cases return 0, their errors containing
 `network used for http://json-schema.org/draft-07/schema`.
 
-- [ ] **Step 3: Implement `BundledSchemas.pm` and the `cache_resolve` lookup**
+- [x] **Step 3: Implement `BundledSchemas.pm` and the `cache_resolve` lookup**
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `prove -lr t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
 Expected: PASS, with the three summary tables showing `fail` 0 (see Global
 Constraints: a skipped acceptance run is a failed step).
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 With the tests green, tidy what this task wrote: `JSONSchema::Validator::read_specification` and `BundledSchemas` locate and load the schema files through one routine, not two. Re-run the Step 4
 commands; they must still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/JSONSchema/Validator/BundledSchemas.pm lib/JSONSchema/Validator/URIResolver.pm \
@@ -500,7 +500,7 @@ git commit -m "Serve bundled meta-schemas by canonical id"
   and `fetch_remote` is false, croak
   `Remote fetching is disabled: cannot load $uri. Preload it with "documents" or pass fetch_remote => 1` -> `load_schema`.
 
-- [ ] **Step 1: Write the failing tests** in `t/remote_fetching.t`
+- [x] **Step 1: Write the failing tests** in `t/remote_fetching.t`
 
 ```perl
 my $schema = { '$ref' => 'http://example.invalid/s.json' };
@@ -563,19 +563,19 @@ Check `get_content` calls `fetch_file` by package name so the `local`
 override takes effect; if it does not, add the smallest seam that makes it
 replaceable and say so in the commit message.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `prove -l t/remote_fetching.t`
 Expected: FAIL (first test: result 1 or a network error, not the new message).
 
-- [ ] **Step 3: Implement** - the check belongs in `URIResolver::cache_resolve`, which
+- [x] **Step 3: Implement** - the check belongs in `URIResolver::cache_resolve`, which
   only document-triggered loads reach; not in `Util::get_content`, which the
   caller's own `resource` and `validate_resource`/`validate_paths` also use.
   Add the options in `Draft4::create` (stored on the validator and passed to `URIResolver->new`) and the `cache_resolve` order
   above. POD: document both options in `Draft4.pm` and `Validator.pm`, and
   correct the `=item resources` typo in `Validator.pm` to `resource`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `prove -lr t` and
 `PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t`
@@ -583,12 +583,12 @@ Expected: PASS, with the three acceptance summary tables showing `fail` 0
 (the harness opts in through its `http` scheme handler; a skipped run is a
 failed step).
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 With the tests green, tidy what this task wrote: the `http`/`https` scheme test is written once; `documents` keys and resolver cache keys go through the same normalisation. Re-run the Step 4
 commands; they must still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 `Changes`: "- INCOMPATIBLE: http/https references are no longer fetched
 unless fetch_remote => 1 is passed or a scheme handler is given; documents can
@@ -609,7 +609,7 @@ reproduce: `validate_request` rejects it. Pin that.
 **Files:**
 - Test: `t/validator_oas.t`
 
-- [ ] **Step 1: Add the test**
+- [x] **Step 1: Add the test**
 
 ```perl
 my $v = JSONSchema::Validator->new(schema => {
@@ -624,12 +624,12 @@ is $r, 0, 'empty path parameter fails minLength 1';
 like errors_text($e), qr/path param "id" has error: minLength \(>= 1\) constraint violated/;
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `prove -l t/validator_oas.t`
 Expected: PASS (behaviour already correct; this is a pin).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add t/validator_oas.t
@@ -667,7 +667,7 @@ git commit -m "Pin empty path parameter rejected by minLength"
     `draft7 invalid` (the Draft 7 cases use
     `t/data/validator_json_schema/draft7-1-*.json` and `draft7-2-*.json`).
 
-- [ ] **Step 1: Write the generator and check its shape**
+- [x] **Step 1: Write the generator and check its shape**
 
 Choose the default `entities` so that `count_refs` is between 1900 and
 2300.
@@ -675,7 +675,7 @@ Choose the default `entities` so that `count_refs` is between 1900 and
 Run: `perl -Ibench/lib -MBench::OpenAPIDocument -e 'my $d = Bench::OpenAPIDocument::build(); print Bench::OpenAPIDocument::count_refs($d), "\n"'`
 Expected: a number between 1900 and 2300.
 
-- [ ] **Step 2: Write `bench/run.pl` and confirm every workload gives the
+- [x] **Step 2: Write `bench/run.pl` and confirm every workload gives the
   expected result once before timing**
 
 `run.pl` validates each workload once and dies unless the valid cases return
@@ -685,7 +685,7 @@ flattering number.
 Run: `perl bench/run.pl --time 1`
 Expected: the header lines and six rows, no die.
 
-- [ ] **Step 3: Record the baseline**
+- [x] **Step 3: Record the baseline**
 
 Measure both the code before Phase 0 and the code after it, back to back on
 the maintainer's machine:
@@ -703,7 +703,7 @@ the gates from the spec ("Performance"); and both baseline tables with
 commit, date, Perl version and CPU model. The Phase 0 table is the baseline
 later phases compare against.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add bench
@@ -715,3 +715,21 @@ git commit -m "Add synthetic OpenAPI benchmark and phase 0 baseline"
 ## After the tasks
 
 - Push the branch and confirm CI is green on every matrix entry.
+
+## Outcome
+
+Where the work differed from the tasks above:
+
+- Task 8 times with Dumbbench (`--precision`, not `--time`): single
+  `Benchmark` runs on the same code differed by over 10%. The baseline is
+  the median of three alternating runs pinned to one core; `bench/README.md`
+  has the procedure.
+- The baseline showed Phase 0 up to 9% slower. Profiling traced it to the
+  bignum checks in `is_number`/`is_integer` and `json_equal`; after the fix
+  Draft 7 is 2% faster than before Phase 0 and `OAS30` 2-5% slower.
+- CI exposed bugs in the `Math::BigFloat` bundled with Perl 5.24 and older
+  (`int`/`==` and `bmod` with mixed signs) and an inexact `%.0f` on Windows
+  Perl 5.20; all are worked around in the validator.
+- The acceptance harness does not run on Windows: its dependencies won't
+  build for Perl 5.20 there and crash Perl 5.44. Linux and macOS run it.
+- GitHub Actions are pinned to commit SHAs.
