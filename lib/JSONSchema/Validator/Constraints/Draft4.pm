@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -97,7 +97,8 @@ sub type {
 sub minimum {
     my ($self, $instance, $minimum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
-    return 1 if $instance >= $minimum;
+    my ($x, $min) = comparable_numbers($instance, $minimum);
+    return 1 if $x >= $min;
     push @{$data->{errors}}, error(
         message => "${instance} is less than ${minimum}",
         instance_path => $instance_path,
@@ -109,7 +110,8 @@ sub minimum {
 sub maximum {
     my ($self, $instance, $maximum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
-    return 1 if $instance <= $maximum;
+    my ($x, $max) = comparable_numbers($instance, $maximum);
+    return 1 if $x <= $max;
     push @{$data->{errors}}, error(
         message => "${instance} is greater than ${maximum}",
         instance_path => $instance_path,
@@ -129,7 +131,8 @@ sub exclusiveMaximum {
     return 0 unless $res;
 
     return 1 unless $exclusiveMaximum;
-    return 1 if $instance != $maximum;
+    my ($x, $max) = comparable_numbers($instance, $maximum);
+    return 1 if $x != $max;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal to ${maximum}",
@@ -150,7 +153,8 @@ sub exclusiveMinimum {
     return 0 unless $res;
 
     return 1 unless $exclusiveMinimum;
-    return 1 if $instance != $minimum;
+    my ($x, $min) = comparable_numbers($instance, $minimum);
+    return 1 if $x != $min;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal to ${minimum}",
@@ -534,9 +538,9 @@ sub multipleOf {
     my $result = 1;
 
     if (is_bignum($instance) || is_bignum($multipleOf)) {
-        require Math::BigFloat;
+        my ($x, $m) = comparable_numbers($instance, $multipleOf);
         # bdiv rounds to 40 digits, so a huge quotient can look whole; bmod is exact.
-        $result = Math::BigFloat->new("$instance")->bmod(Math::BigFloat->new("$multipleOf"))->is_zero ? 1 : 0;
+        $result = $x->bmod($m)->is_zero ? 1 : 0;
     } else {
         my $div = $instance / $multipleOf;
         $result = 0 if $div == 'Inf' || int($div) != $div;

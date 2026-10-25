@@ -15,7 +15,7 @@ use URI 1.00 ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type is_bignum json_equal
+    round is_type detect_type is_bignum json_equal comparable_numbers
     data_section load_schema
 );
 
@@ -248,6 +248,20 @@ sub is_bignum {
     return $value->isa('Math::BigInt') || $value->isa('Math::BigFloat') ? 1 : 0;
 }
 
+sub comparable_numbers {
+    my ($x, $y) = @_;
+    return ($x, $y) unless is_bignum($x) || is_bignum($y);
+    require Math::BigFloat;
+    return map { Math::BigFloat->new(_exact_number_string($_)) } $x, $y;
+}
+
+sub _exact_number_string {
+    my ($n) = @_;
+    return "$n" if ref $n || int($n) != $n;
+    # Perl stringifies a float to 15 significant digits; an integral float prints exactly with %.0f.
+    return sprintf('%.0f', $n);
+}
+
 sub json_equal {
     my ($x, $y) = @_;
 
@@ -261,7 +275,8 @@ sub json_equal {
 
     if (is_number($x, 1) || is_number($y, 1)) {
         return 0 unless is_number($x, 1) && is_number($y, 1);
-        return $x == $y ? 1 : 0;
+        my ($nx, $ny) = comparable_numbers($x, $y);
+        return $nx == $ny ? 1 : 0;
     }
 
     if (is_array($x) || is_array($y)) {

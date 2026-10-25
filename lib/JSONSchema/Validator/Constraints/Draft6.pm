@@ -7,7 +7,7 @@ use warnings;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(is_type json_equal);
+use JSONSchema::Validator::Util qw(is_type json_equal comparable_numbers);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
@@ -23,7 +23,8 @@ sub exclusiveMaximum {
     my ($self, $instance, $exclusiveMaximum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
 
-    return 1 if $instance < $exclusiveMaximum;
+    my ($x, $max) = comparable_numbers($instance, $exclusiveMaximum);
+    return 1 if $x < $max;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal or greater than ${exclusiveMaximum}",
@@ -37,7 +38,8 @@ sub exclusiveMinimum {
     my ($self, $instance, $exclusiveMinimum, $schema, $instance_path, $schema_path, $data) = @_;
     return 1 unless $self->check_type($instance, 'number');
 
-    return 1 if $instance > $exclusiveMinimum;
+    my ($x, $min) = comparable_numbers($instance, $exclusiveMinimum);
+    return 1 if $x > $min;
 
     push @{$data->{errors}}, error(
         message => "${instance} is equal or less than ${exclusiveMinimum}",
