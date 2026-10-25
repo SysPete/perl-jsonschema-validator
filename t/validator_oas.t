@@ -105,5 +105,32 @@ for my $validator_class (@{$JSONSchema::Validator::OAS_VALIDATORS}) {
     like errors_text($errors), qr/instance is not of enums/, 'OAS30 boolean enum says why';
 }
 
+{
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.2',
+        info => { title => 't', version => '1' },
+        paths => {
+            '/invoices/{id}' => {
+                parameters => [
+                    {
+                        name => 'id', in => 'path', required => JSON::PP::true(),
+                        schema => { type => 'string', minLength => 1 }
+                    }
+                ],
+                get => { responses => { 200 => { description => 'ok' } } }
+            }
+        }
+    });
+
+    my ($result, $errors) = $validator->validate_request(
+        method => 'get',
+        openapi_path => '/invoices/{id}',
+        parameters => { path => { id => '' } },
+    );
+    is $result, 0, 'empty path parameter fails minLength 1';
+    like errors_text($errors), qr/path param "id" has error: minLength \(>= 1\) constraint violated/,
+        'empty path parameter says why';
+}
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
