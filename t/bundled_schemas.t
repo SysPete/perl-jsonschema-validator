@@ -18,24 +18,28 @@ my %SPEC = (
     'draft-07' => 'Draft7',
 );
 
-for my $draft (sort keys %SPEC) {
-    for my $id ("http://json-schema.org/$draft/schema#",
-                "http://json-schema.org/$draft/schema") {
-        my $v = JSONSchema::Validator->new(
-            specification => $SPEC{$draft},
-            schema => { '$ref' => $id },
-            scheme_handlers => { http => $fail, https => $fail },
-        );
-        is( ($v->validate_schema({ type => 'string' }))[0], 1, "$id: valid schema" );
-        my ($r, $e) = $v->validate_schema({ type => 12 });
-        is $r, 0, "$id: invalid schema";
-        like errors_text($e), qr{instance is not of enums \[instance path: /type\]},
-            "$id: says why";
+subtest 'meta-schemas resolve by id without the network' => sub {
+    for my $draft (sort keys %SPEC) {
+        for my $id ("http://json-schema.org/$draft/schema#",
+                    "http://json-schema.org/$draft/schema") {
+            my $v = JSONSchema::Validator->new(
+                specification => $SPEC{$draft},
+                schema => { '$ref' => $id },
+                scheme_handlers => { http => $fail, https => $fail },
+            );
+            is( ($v->validate_schema({ type => 'string' }))[0], 1, "$id: valid schema" );
+            my ($r, $e) = $v->validate_schema({ type => 12 });
+            is $r, 0, "$id: invalid schema";
+            like errors_text($e), qr{instance is not of enums \[instance path: /type\]},
+                "$id: says why";
+        }
     }
-}
+};
 
-ok bundled_schema('https://spec.openapis.org/oas/3.0/schema/2019-04-02'), 'oas30';
-ok !defined bundled_schema('http://example.com/nope'), 'unknown id';
+subtest 'lookup by id' => sub {
+    ok bundled_schema('https://spec.openapis.org/oas/3.0/schema/2019-04-02'), 'oas30';
+    ok !defined bundled_schema('http://example.com/nope'), 'unknown id';
+};
 
 subtest 'one validator cannot change the meta-schema another sees' => sub {
     my $id = 'http://json-schema.org/draft-07/schema#';
