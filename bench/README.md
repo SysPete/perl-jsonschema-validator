@@ -65,13 +65,13 @@ From the design ("Performance"):
 Machine: 13th Gen Intel Core i7-1355U, Perl v5.38.2, pinned to CPU 0.
 Medians of three alternating runs, 2026-10-25, ops/sec.
 
-| workload | before Phase 0 (`9d2ab08`) | Phase 0 (`41bbf86`) | change |
+| workload | before Phase 0 (`9d2ab08`) | Phase 0 (`caf87c6`) | change |
 | --- | ---: | ---: | ---: |
-| draft7 invalid | 13676 | 12458 | -8.9% |
-| draft7 valid | 15343 | 14072 | -8.3% |
-| oas30 request invalid | 6183 | 5844 | -5.5% |
-| oas30 request valid | 8024 | 7571 | -5.6% |
-| oas30 response invalid | 235.9 | 226.3 | -4.1% |
-| oas30 response valid | 236.4 | 225.0 | -4.8% |
+| draft7 invalid | 13859 | 14189 | +2.4% |
+| draft7 valid | 15363 | 15617 | +1.7% |
+| oas30 request invalid | 6220 | 5988 | -3.7% |
+| oas30 request valid | 8041 | 7664 | -4.7% |
+| oas30 response invalid | 239.1 | 232.7 | -2.7% |
+| oas30 response valid | 236.1 | 232.4 | -1.6% |
 
 The Phase 0 column is the baseline later phases compare against.
