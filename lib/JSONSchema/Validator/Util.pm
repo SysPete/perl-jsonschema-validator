@@ -16,7 +16,7 @@ our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
     round is_type detect_type is_bignum json_equal comparable_numbers
-    data_section load_schema
+    data_section load_schema resolve_uri
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -63,6 +63,25 @@ BEGIN {
     my $json = $json_class->new->canonical(1)->utf8;
     *json_encode = sub { $json->encode(@_); };
     *json_decode = sub { $json->decode(@_); };
+}
+
+# URI->abs dies on a base without an authority, such as urn:uuid:...
+sub resolve_uri {
+    my ($ref, $base) = @_;
+
+    $ref = URI->new("$ref");
+    return $ref unless defined $base && length "$base";
+    $base = URI->new("$base");
+
+    return $ref->abs($base) if $base->can('authority');
+    return $ref if $ref->scheme;
+
+    if ("$ref" =~ /\A#(.*)\z/s) {
+        my $resolved = $base->clone;
+        $resolved->fragment($1);
+        return $resolved;
+    }
+    croak qq{cannot resolve relative reference "$ref" against non-hierarchical base "$base"};
 }
 
 sub unbool {

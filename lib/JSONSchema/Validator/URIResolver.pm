@@ -13,7 +13,7 @@ use URI::Escape;
 use Encode;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw( load_schema );
+use JSONSchema::Validator::Util qw( load_schema resolve_uri );
 
 # what keys contain the schema? Required to find an $id in a schema
 my $SEARCH_ID = {
@@ -165,10 +165,7 @@ sub cache_id_dfs {
     return if exists $schema->{'$ref'};
 
     if (exists $schema->{$self->validator->ID_FIELD} && !ref $schema->{$self->validator->ID_FIELD}) {
-        my $id = URI->new($schema->{$self->validator->ID_FIELD});
-        my $scope = $scopes->[-1];
-
-        $id = ($scope && $scope->as_string) ? $id->abs($scope) : $id;
+        my $id = resolve_uri($schema->{$self->validator->ID_FIELD}, $scopes->[-1]);
 
         $self->cache->{$id->as_string} = $schema;
         push @$scopes, $id;

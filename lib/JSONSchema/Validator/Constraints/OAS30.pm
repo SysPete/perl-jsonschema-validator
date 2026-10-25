@@ -9,7 +9,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util 'detect_type';
+use JSONSchema::Validator::Util qw(detect_type resolve_uri);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
@@ -149,8 +149,7 @@ sub discriminator {
     $data->{discriminator}{$path} = 1;
 
     my $scope = $self->validator->scope;
-    $ref = URI->new($ref);
-    $ref = $ref->abs($scope) if $scope;
+    $ref = resolve_uri($ref, $scope);
 
     my ($current_scope, $schema) = $self->validator->resolver->resolve($ref);
 

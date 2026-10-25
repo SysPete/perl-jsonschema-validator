@@ -11,7 +11,7 @@ use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Constraints::Draft4;
 use JSONSchema::Validator::URIResolver;
-use JSONSchema::Validator::Util qw(is_type);
+use JSONSchema::Validator::Util qw(is_type resolve_uri);
 
 use constant SPECIFICATION => 'Draft4';
 use constant ID => 'http://json-schema.org/draft-04/schema#';
@@ -115,7 +115,7 @@ sub _validate_schema {
     my $id = $schema->{$self->ID_FIELD};
     if ($id && $apply_scope && $self->using_id_with_ref && !$is_exists_ref) {
         my $uri = $id;
-        $uri = URI->new($id)->abs($self->scope)->as_string if $self->scope;
+        $uri = resolve_uri($id, $self->scope)->as_string if $self->scope;
         push @{$self->scopes}, $uri;
     }
 

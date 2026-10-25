@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers resolve_uri);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -700,8 +700,7 @@ sub ref {
     my ($self, $instance, $ref, $origin_schema, $instance_path, $schema_path, $data) = @_;
 
     my $scope = $self->validator->scope;
-    $ref = URI->new($ref);
-    $ref = $ref->abs($scope) if $scope;
+    $ref = resolve_uri($ref, $scope);
 
     my ($current_scope, $schema) = $self->validator->resolver->resolve($ref);
 
