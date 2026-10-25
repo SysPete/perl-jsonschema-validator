@@ -166,6 +166,17 @@ subtest 'the scan at new handles a cyclic schema' => sub {
         'builds';
 };
 
+subtest '$id keys inside documents are indexed' => sub {
+    my $v = JSONSchema::Validator::Draft7->new(
+        schema => { '$ref' => 'http://e.invalid/inner.json' },
+        documents => { 'http://e.invalid/outer.json' => {
+            definitions => { a => { '$id' => 'inner.json', type => 'integer' } } } });
+    is( ($v->validate_schema(1))[0], 1, 'resolves without loading' );
+    my ($r, $e) = $v->validate_schema('x');
+    is $r, 0, 'and is applied';
+    like errors_text($e), qr/type mismatch \(expecting any of \(integer\), found: string\)/, 'says why';
+};
+
 subtest 'documents that would replace each other croak' => sub {
     my $already = qr/^documents: http:\/\/e\.invalid\/s\.json is already defined/;
     for my $case (
