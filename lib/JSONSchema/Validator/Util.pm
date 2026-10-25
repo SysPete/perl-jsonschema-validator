@@ -262,14 +262,13 @@ sub is_bool {
 }
 
 sub is_bignum {
-    my ($value) = @_;
-    return 0 unless blessed($value);
-    return $value->isa('Math::BigInt') || $value->isa('Math::BigFloat') ? 1 : 0;
+    return 0 unless blessed($_[0]);
+    return $_[0]->isa('Math::BigInt') || $_[0]->isa('Math::BigFloat') ? 1 : 0;
 }
 
 sub comparable_numbers {
     my ($x, $y) = @_;
-    return ($x, $y) unless is_bignum($x) || is_bignum($y);
+    return ($x, $y) unless (ref $x && is_bignum($x)) || (ref $y && is_bignum($y));
     require Math::BigFloat;
     return map { Math::BigFloat->new(_exact_number_string($_)) } $x, $y;
 }
@@ -286,6 +285,13 @@ sub json_equal {
 
     return defined $y ? 0 : 1 unless defined $x;
     return 0 unless defined $y;
+
+    # strict booleans are always references, so two plain scalars are numbers or strings
+    if (!ref $x && !ref $y) {
+        my $x_is_number = is_number($x, 1);
+        return 0 unless $x_is_number == is_number($y, 1);
+        return ($x_is_number ? $x == $y : $x eq $y) ? 1 : 0;
+    }
 
     if (is_bool($x, 1) || is_bool($y, 1)) {
         return 0 unless is_bool($x, 1) && is_bool($y, 1);
@@ -320,8 +326,8 @@ sub json_equal {
 
 # params: $value, $is_strict
 sub is_integer {
-    return $_[0]->is_int ? 1 : 0 if is_bignum($_[0]);
     return 1 if B::svref_2object(\$_[0])->FLAGS & B::SVf_IOK();
+    return $_[0]->is_int ? 1 : 0 if ref $_[0] && is_bignum($_[0]);
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
     return 1 if looks_like_number($_[0]) && int($_[0]) == $_[0];
@@ -330,8 +336,8 @@ sub is_integer {
 
 # params: $value, $is_strict
 sub is_number {
-    return 1 if is_bignum($_[0]);
     return 1 if B::svref_2object(\$_[0])->FLAGS & (B::SVf_IOK() | B::SVf_NOK());
+    return 1 if ref $_[0] && is_bignum($_[0]);
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
     return 1 if looks_like_number($_[0]);
