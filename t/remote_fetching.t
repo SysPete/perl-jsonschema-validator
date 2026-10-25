@@ -117,5 +117,20 @@ like errors_text($e), qr/type mismatch/, 'and is applied';
 is( (JSONSchema::Validator::Draft7->new(schema => $file_ref)->validate_schema(1))[0], 1,
     'file: ref accepts a valid instance' );
 
+subtest 'local files can be refused' => sub {
+    my $path = test_dir('data/remote_fetching/integer.json');
+    my %refuse = (
+        base_uri => 'urn:example:schema',
+        scheme_handlers => { file => sub { die "local files are disabled\n" } },
+    );
+    for my $ref ($path, "file://$path", 'integer.json') {
+        my $v = JSONSchema::Validator::Draft7->new(schema => { '$ref' => $ref }, %refuse);
+        my ($r, $e) = $v->validate_schema(1);
+        is $r, 0, "$ref is not read";
+        like errors_text($e), qr/local files are disabled|cannot resolve relative reference/,
+            "$ref says why";
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
