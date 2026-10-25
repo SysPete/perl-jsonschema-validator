@@ -1,4 +1,7 @@
 Revision history for JSONSchema-Validator
+0.012  Not Released
+    - Minimum Perl version is now 5.20
+
 
 0.011  2022-08-24
     - Added checking params from schema

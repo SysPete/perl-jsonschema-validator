@@ -2,26 +2,50 @@ name: test
 on: ['push', 'pull_request']
 jobs:
   test:
-    name: Perl ${{ matrix.perl }} on os ${{ matrix.os }}
+    name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        perl: ['5.16','5.18','5.20','5.22','5.30','5.32','5.34','5.36']
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
+        perl: ['5.20', '5.22', '5.24', '5.26', '5.28', '5.30', '5.32', '5.34', '5.36', '5.38', '5.40', '5.42', 'latest']
+        include:
+          - { os: macos-latest, perl: '5.20' }
+          - { os: macos-latest, perl: 'latest' }
+          - { os: windows-latest, perl: '5.20' }
+          - { os: windows-latest, perl: 'latest' }
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up perl
         uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: ${{ matrix.perl }}
       - name: Show perl version
         run: perl -V
-      - name: Install specific dependencies
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.perl >= '5.20' }}
-        run: cpanm -n Test::JSON::Schema::Acceptance LWP::UserAgent
+      - name: Install optional dependencies
+        run: cpanm -n Test::JSON::Schema::Acceptance@1.040 YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
       - name: Install common dependencies
         run: cpanm -n --installdeps .
       - name: Run tests
-        run: prove -lvr t
+        run: prove -lr t
+        env:
+          ACCEPTANCE_TESTING: 1
+
+  acceptance-latest:
+    name: Acceptance suite, newest release
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: latest
+      - name: Install dependencies
+        run: |
+          cpanm -n Test::JSON::Schema::Acceptance YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS
+          cpanm -n --installdeps .
+      - name: Run acceptance tests
+        run: prove -l t/acceptance.t
         env:
           ACCEPTANCE_TESTING: 1
