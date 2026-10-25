@@ -37,5 +37,16 @@ for my $draft (sort keys %SPEC) {
 ok bundled_schema('https://spec.openapis.org/oas/3.0/schema/2019-04-02'), 'oas30';
 ok !defined bundled_schema('http://example.com/nope'), 'unknown id';
 
+subtest 'one validator cannot change the meta-schema another sees' => sub {
+    my $id = 'http://json-schema.org/draft-07/schema#';
+    my $v1 = JSONSchema::Validator->new(specification => 'Draft7', schema => { '$ref' => $id });
+    my (undef, $meta) = $v1->resolver->resolve(URI->new($id));
+    $meta->{properties}{type} = { type => 'null' };
+
+    my $v2 = JSONSchema::Validator->new(specification => 'Draft7', schema => { '$ref' => $id });
+    my ($r, $e) = $v2->validate_schema({ type => 'string' });
+    is $r, 1, 'a later validator gets an unchanged copy' or diag errors_text($e);
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

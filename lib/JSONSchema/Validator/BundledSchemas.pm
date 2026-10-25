@@ -6,6 +6,7 @@ use strict;
 use warnings;
 
 use File::Basename ();
+use Storable ();
 use URI::file;
 
 use JSONSchema::Validator::Util qw( load_schema );
@@ -43,7 +44,7 @@ sub read_bundled_schema {
 
 Returns the bundled meta-schema whose C<$id> (C<id> for Draft 4 and OpenAPI 3.0)
 equals the given URI, with or without an empty trailing fragment, or C<undef>
-if there is none. Each file is read once per process.
+if there is none. Each file is read once per process, and each call returns its own copy.
 
 =cut
 
@@ -54,7 +55,8 @@ sub bundled_schema {
     $uri =~ s/#\z//;
     my $name = $FILE_FOR_ID{$uri} or return;
 
-    return $CACHE{$name} //= read_bundled_schema($name);
+    # a copy, so a caller that changes it does not change it for every later validator
+    return Storable::dclone($CACHE{$name} //= read_bundled_schema($name));
 }
 
 1;
