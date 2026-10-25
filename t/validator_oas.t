@@ -59,7 +59,7 @@ for my $validator_class (@{$JSONSchema::Validator::OAS_VALIDATORS}) {
     like $@, qr/invalid schema/, "check exception message on wrong meta schema validation of $resource";
 }
 
-{
+subtest 'OAS30 query strings checked against typed enums' => sub {
     my $validator = JSONSchema::Validator->new(
         specification => 'OAS30',
         schema => {
@@ -89,23 +89,23 @@ for my $validator_class (@{$JSONSchema::Validator::OAS_VALIDATORS}) {
     };
 
     my ($result, $errors) = $request->(int => '1');
-    is $result, 1, 'OAS30 query "1" is in integer enum [1, 2]'
+    is $result, 1, '"1" is in integer enum [1, 2]'
         or diag errors_text($errors);
 
     ($result, $errors) = $request->(int => '3');
-    is $result, 0, 'OAS30 query "3" is not in integer enum [1, 2]';
-    like errors_text($errors), qr/instance is not of enums/, 'OAS30 integer enum says why';
+    is $result, 0, '"3" is not in integer enum [1, 2]';
+    like errors_text($errors), qr/instance is not of enums/, 'integer enum says why';
 
     ($result, $errors) = $request->(bool => '1');
-    is $result, 1, 'OAS30 query "1" is in boolean enum [true]'
+    is $result, 1, '"1" is in boolean enum [true]'
         or diag errors_text($errors);
 
     ($result, $errors) = $request->(bool => '0');
-    is $result, 0, 'OAS30 query "0" is not in boolean enum [true]';
-    like errors_text($errors), qr/instance is not of enums/, 'OAS30 boolean enum says why';
-}
+    is $result, 0, '"0" is not in boolean enum [true]';
+    like errors_text($errors), qr/instance is not of enums/, 'boolean enum says why';
+};
 
-{
+subtest 'OAS30 empty path parameter' => sub {
     my $validator = JSONSchema::Validator->new(schema => {
         openapi => '3.0.2',
         info => { title => 't', version => '1' },
@@ -127,10 +127,10 @@ for my $validator_class (@{$JSONSchema::Validator::OAS_VALIDATORS}) {
         openapi_path => '/invoices/{id}',
         parameters => { path => { id => '' } },
     );
-    is $result, 0, 'empty path parameter fails minLength 1';
+    is $result, 0, 'fails minLength 1';
     like errors_text($errors), qr/path param "id" has error: minLength \(>= 1\) constraint violated/,
-        'empty path parameter says why';
-}
+        'says why';
+};
 
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
