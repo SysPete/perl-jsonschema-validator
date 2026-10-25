@@ -41,6 +41,31 @@ jobs:
         env:
           ACCEPTANCE_TESTING: ${{ matrix.os != 'windows-latest' && '1' || '' }}
 
+  # The optional YAML and JSON modules must never be needed, so one job runs without them.
+  core-only:
+    name: Perl latest without optional modules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@3b59bd33efdae98406a9bc4b75a4aa041e11993a # v1.44.4
+        with:
+          perl-version: latest
+      - name: Install dependencies
+        run: cpanm -n --installdeps .
+      - name: Check the optional modules are absent
+        run: |
+          for module in YAML::XS YAML::PP Cpanel::JSON::XS JSON::XS; do
+              if perl -M"$module" -e1 2>/dev/null; then
+                  echo "::error::$module is installed"
+                  exit 1
+              fi
+          done
+      - name: Run tests
+        run: prove -lr t
+
   acceptance-latest:
     name: Acceptance suite, newest release
     runs-on: ubuntu-latest
@@ -89,7 +114,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, history]
+    needs: [test, core-only, history]
     runs-on: ubuntu-latest
     steps:
       - name: Check required jobs
