@@ -1,5 +1,7 @@
 name: test
 on: ['push', 'pull_request']
+permissions:
+  contents: read
 jobs:
   test:
     name: Perl ${{ matrix.perl }} on ${{ matrix.os }}
@@ -16,6 +18,8 @@ jobs:
           - { os: windows-latest, perl: 'latest' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up perl
         uses: shogo82148/actions-setup-perl@3b59bd33efdae98406a9bc4b75a4aa041e11993a # v1.44.4
         with:
@@ -43,6 +47,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up perl
         uses: shogo82148/actions-setup-perl@3b59bd33efdae98406a9bc4b75a4aa041e11993a # v1.44.4
         with:
@@ -67,6 +73,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Check for merge commits
         env:
           BASE: ${{ github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
