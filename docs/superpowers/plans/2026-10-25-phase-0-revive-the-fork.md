@@ -714,8 +714,4 @@ git commit -m "Add synthetic OpenAPI benchmark and phase 0 baseline"
 
 ## After the tasks
 
-- Upstream #20 (install failing on `Test::CPAN::Changes`): already resolved
-  in 0.011, whose `t/release-cpan-changes.t` skips without `RELEASE_TESTING`
-  and whose metadata lists the module as a develop requirement only. Record
-  that on the tracking issue; no code change.
 - Push the branch and confirm CI is green on every matrix entry.
