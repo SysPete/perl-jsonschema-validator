@@ -59,5 +59,16 @@ subtest 'empty reference is the base without its fragment' => sub {
     is resolve_uri('', 'http://h/a/s.json#/a')->as_string, 'http://h/a/s.json', 'hierarchical base';
 };
 
+subtest 'a relative $id under a URN base croaks at new' => sub {
+    for my $schema (
+        { '$id' => 'urn:example:root', definitions => { a => { '$id' => 'item.json' } } },
+        { '$id' => 'urn:example:root', properties => { a => { '$id' => 'item.json' } } },
+    ) {
+        my $v = eval { JSONSchema::Validator->new(specification => 'Draft7', schema => $schema) };
+        like $@, qr/^cannot resolve relative reference "item\.json" against non-hierarchical base "urn:example:root"/,
+            'says why';
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

@@ -18,6 +18,7 @@ Revision history for JSONSchema-Validator
       include the source file and line ("at .../Foo.pm line 12.")
     - References resolve against URN base URIs (urn:uuid:...) instead of
       dying; a relative path against such a base is a validation error
+      in a $ref, and makes new() croak in an $id
     - The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas resolve by their
       canonical id without fetching them
     - Minimum Perl version is now 5.20
