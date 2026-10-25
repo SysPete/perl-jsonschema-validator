@@ -11,7 +11,7 @@ use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Constraints::Draft4;
 use JSONSchema::Validator::URIResolver;
-use JSONSchema::Validator::Util qw(is_type resolve_uri);
+use JSONSchema::Validator::Util qw(is_type resolve_uri exception_message);
 
 use constant SPECIFICATION => 'Draft4';
 use constant ID => 'http://json-schema.org/draft-04/schema#';
@@ -138,7 +138,7 @@ sub _validate_schema {
             $self->constraints->$constraint($instance, $v, $schema, $instance_path, $spath, $data);
         };
         push @{$data->{errors}}, error(
-                message => "exception: $@",
+                message => "exception: " . exception_message($@),
                 instance_path => $instance_path,
                 schema_path => $spath
             ) if $@;
@@ -207,9 +207,9 @@ A handler for C<http> or C<https> also allows documents to load over that scheme
 =head4 fetch_remote
 
 Allow the validator to load C<http> and C<https> references found in the schema. Default value is 0:
-such a reference is an error unless the document is preloaded with C<documents>, a
-C<scheme_handlers> entry covers its scheme, or this option is true. References with other schemes
-(C<file:>, for example) are not affected.
+then C<new> croaks on such a reference unless the document is preloaded with C<documents>, a
+C<scheme_handlers> entry covers its scheme, or it is a bundled meta-schema. References with other
+schemes (C<file:>, for example) are not affected.
 
 =head4 documents
 

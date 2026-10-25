@@ -43,6 +43,9 @@ my $SEARCH_ID = {
     }
 };
 
+# keywords whose values are instances, not schemas: a "$ref" inside one is data
+my %DATA_KEYWORDS = map { $_ => 1 } qw(enum const default examples example);
+
 sub new {
     my ($class, %params) = @_;
 
@@ -78,6 +81,12 @@ sub new {
         my $document = $documents->{$document_uri};
         my $key = $self->_add_document($document_uri, $document);
         $self->cache_id(URI->new($key), $document) if $validator->using_id_with_ref && ref $document eq 'HASH';
+    }
+
+    # fail now, not when some later instance reaches the reference
+    unless ($fetch_remote) {
+        $self->_check_remote_refs($schema, $base_uri);
+        $self->_check_remote_refs($documents->{$_}, $_) for keys %$documents;
     }
 
     return $self;
@@ -129,8 +138,7 @@ sub cache_resolve {
         my $is_web = $scheme && ($scheme eq 'http' || $scheme eq 'https');
 
         # A handler for the scheme is the caller opting in to it.
-        croak sprintf('Remote fetching is disabled: cannot load %s. Preload it with "documents" or pass fetch_remote => 1', $uri->as_string)
-            if $is_web && !$self->fetch_remote && !exists $self->scheme_handlers->{$scheme};
+        _croak_remote_disabled($uri) if $is_web && !$self->fetch_remote && !exists $self->scheme_handlers->{$scheme};
 
         $schema = load_schema($uri->as_string, $self->scheme_handlers);
     }
@@ -140,6 +148,57 @@ sub cache_resolve {
     $self->cache_id($uri, $schema) if $self->validator->using_id_with_ref;
 
     return $schema;
+}
+
+sub _croak_remote_disabled {
+    my ($uri) = @_;
+    croak sprintf('Remote fetching is disabled: cannot load %s. Preload it with "documents" or pass fetch_remote => 1',
+        $uri->as_string);
+}
+
+# Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
+sub _check_remote_refs {
+    my ($self, $data, $scope) = @_;
+
+    if (ref $data eq 'ARRAY') {
+        $self->_check_remote_refs($_, $scope) for @$data;
+        return;
+    }
+    return unless ref $data eq 'HASH';
+
+    # siblings of $ref are ignored (draft 4-7, OpenAPI 3.0), so are not searched
+    if (exists $data->{'$ref'}) {
+        $self->_check_remote_ref($data->{'$ref'}, $scope) unless ref $data->{'$ref'};
+        return;
+    }
+
+    my $id = $data->{$self->validator->ID_FIELD};
+    if ($self->validator->using_id_with_ref && defined $id && !ref $id) {
+        $scope = eval { resolve_uri($id, $scope)->as_string } // $scope;
+    }
+
+    for my $key (keys %$data) {
+        next if $DATA_KEYWORDS{$key} || $key =~ /^x-/;
+        $self->_check_remote_refs($data->{$key}, $scope);
+    }
+}
+
+sub _check_remote_ref {
+    my ($self, $ref, $scope) = @_;
+
+    # a reference that can't be resolved at all is reported by validation
+    my $uri = eval { resolve_uri($ref, $scope) } or return;
+    my $scheme = $uri->scheme // '';
+    return unless $scheme eq 'http' || $scheme eq 'https';
+    return if exists $self->scheme_handlers->{$scheme};
+
+    my $document = $uri->clone;
+    $document->fragment(undef);
+    return if exists $self->cache->{$uri->as_string}
+           || exists $self->cache->{$document->as_string}
+           || defined bundled_schema($document->as_string);
+
+    _croak_remote_disabled($document);
 }
 
 # self - URIResolver

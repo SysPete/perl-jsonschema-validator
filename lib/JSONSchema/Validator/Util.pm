@@ -16,7 +16,7 @@ our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
     round is_type detect_type is_bignum json_equal comparable_numbers
-    data_section load_schema resolve_uri
+    data_section load_schema resolve_uri exception_message
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -376,6 +376,15 @@ sub is_null {
 sub is_string {
     return !(ref $_[0]) && !is_number(@_) && defined $_[0] if $_[1]; # is strict
     return !(ref $_[0]) && defined $_[0];
+}
+
+# Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
+sub exception_message {
+    my ($message) = @_;
+    $message =~ s/ at (?:(?! at ).)*?(?:\.(?:pm|pl|t)|\(eval \d+\)|-e) line \d+\.?//g;
+    $message =~ s/\s+/ /g;
+    $message =~ s/\A | \z//g;
+    return $message;
 }
 
 sub data_section {

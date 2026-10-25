@@ -9,7 +9,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(detect_type resolve_uri);
+use JSONSchema::Validator::Util qw(detect_type resolve_uri exception_message);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
@@ -164,7 +164,7 @@ sub discriminator {
     if ($@) {
         $result = 0;
         push @{$data->{errors}}, error(
-            message => "exception: $@",
+            message => "exception: " . exception_message($@),
             instance_path => $instance_path,
             schema_path => $schema_path
         );

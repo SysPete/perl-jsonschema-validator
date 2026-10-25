@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers resolve_uri);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -716,7 +716,7 @@ sub ref {
     if ($@) {
         $result = 0;
         push @{$data->{errors}}, error(
-            message => "exception: $@",
+            message => "exception: " . exception_message($@),
             instance_path => $instance_path,
             schema_path => $schema_path
         );
