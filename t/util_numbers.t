@@ -146,6 +146,30 @@ subtest 'a huge exponent is never written out in full' => sub {
     }
 };
 
+subtest 'native integers above 2**53 compare exactly with bignums' => sub {
+    my $iv = 9007199254740993;
+    my $big_iv = Math::BigInt->new('9007199254740993');
+    ok json_equal($iv, $big_iv), 'IV 2**53+1 equals BigInt 2**53+1';
+    ok !json_equal($iv - 1, $big_iv), 'IV 2**53 is not BigInt 2**53+1';
+    ok json_equal(18446744073709551615, Math::BigInt->new('18446744073709551615')), 'UV max';
+    ok json_equal(-9223372036854775807, Math::BigInt->new('-9223372036854775807')), 'IV min + 1';
+
+    for my $case (
+        [{ maximum => $iv }, $big_iv, 1],
+        [{ minimum => $big_iv }, $iv, 1],
+        [{ maximum => $iv - 1 }, $big_iv, 0, qr/^9007199254740993 is greater than 9007199254740992/],
+        [{ const => $iv }, $big_iv, 1],
+        [{ multipleOf => Math::BigInt->new(3) }, $iv, 1],
+    ) {
+        my ($schema, $instance, $expected, $error) = @$case;
+        my $name = join(',', %$schema) . " with $instance";
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema);
+        my ($r, $e) = $v->validate_schema($instance);
+        is $r, $expected, $name or diag errors_text($e);
+        like errors_text($e), $error, "$name says why" if $error;
+    }
+};
+
 subtest 'strict uniqueItems' => sub {
     my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
     my $exp = '1000000000000000';
