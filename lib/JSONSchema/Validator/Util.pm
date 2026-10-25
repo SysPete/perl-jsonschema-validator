@@ -459,7 +459,8 @@ sub is_string {
 # Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
 sub exception_message {
     my ($message) = @_;
-    $message =~ s/ at (?:(?! at ).)*?(?:\.(?:pm|pl|t)|\(eval \d+\)|-e) line \d+\.?//g;
+    # any file name, since a handler that dies may live in app.psgi or bin/app
+    $message =~ s/ at (?:(?! at ).)+? line \d+(?:, <[^>]*> (?:line|chunk) \d+)?\.?(?=\s|\z)//g;
     $message =~ s/\s+/ /g;
     $message =~ s/\A | \z//g;
     return $message;
