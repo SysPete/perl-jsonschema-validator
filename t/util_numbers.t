@@ -53,6 +53,27 @@ $v = JSONSchema::Validator->new(specification => 'Draft7',
 is $r, 0, '1e308 is not a multiple of 0.123456789';
 like errors_text($e), qr/is not multiple of/, 'float division = inf says why';
 
+for my $case (
+    [Math::BigFloat->new('1.1'), 0, 'BigFloat 1.1 is not an integer'],
+    [Math::BigFloat->new('2.0'), 1, 'BigFloat 2.0 is an integer'],
+    [$big, 1, 'BigInt 2**70 is an integer'],
+) {
+    my ($instance, $expected, $name) = @$case;
+    $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { type => 'integer' });
+    ($r, $e) = $v->validate_schema($instance);
+    is $r, $expected, "Draft7 $name" or diag errors_text($e);
+}
+
+for my $case (
+    ['4.5', '1.5', 1], ['-4.5', '1.5', 1], ['-4.6', '1.5', 0],
+) {
+    my ($instance, $multiple, $expected) = @$case;
+    $v = JSONSchema::Validator->new(specification => 'Draft7',
+        schema => { multipleOf => Math::BigFloat->new($multiple) });
+    ($r, $e) = $v->validate_schema(Math::BigFloat->new($instance));
+    is $r, $expected, "BigFloat $instance multipleOf $multiple is $expected" or diag errors_text($e);
+}
+
 my @bounds = (
     [$big, { minimum => 4.5 }, 1, '2**70 >= 4.5'],
     [0.5, { maximum => $big }, 1, '0.5 <= 2**70'],

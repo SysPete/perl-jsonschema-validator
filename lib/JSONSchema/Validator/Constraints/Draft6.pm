@@ -7,14 +7,17 @@ use warnings;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(is_type json_equal comparable_numbers);
+use JSONSchema::Validator::Util qw(is_type is_bignum json_equal comparable_numbers);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
 # params: $self, $value, $type, $strict
 sub check_type {
     if ($_[2] eq 'integer') {
-        return is_type($_[1], 'number', $_[3] // $_[0]->strict) && int($_[1]) == $_[1];
+        return 0 unless is_type($_[1], 'number', $_[3] // $_[0]->strict);
+        # the Math::BigFloat bundled with Perl 5.24 and older says int(1.1) == 1.1
+        return $_[1]->is_int ? 1 : 0 if ref $_[1] && is_bignum($_[1]);
+        return int($_[1]) == $_[1];
     }
     return is_type($_[1], $_[2], $_[3] // $_[0]->strict);
 }

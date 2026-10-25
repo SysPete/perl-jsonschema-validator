@@ -540,7 +540,8 @@ sub multipleOf {
     if (is_bignum($instance) || is_bignum($multipleOf)) {
         my ($x, $m) = comparable_numbers($instance, $multipleOf);
         # bdiv rounds to 40 digits, so a huge quotient can look whole; bmod is exact.
-        $result = $x->bmod($m)->is_zero ? 1 : 0;
+        # babs because the Math::BigFloat bundled with Perl 5.24 and older gets bmod wrong for mixed signs.
+        $result = $x->babs->bmod($m->babs)->is_zero ? 1 : 0;
     } else {
         my $div = $instance / $multipleOf;
         $result = 0 if $div == 'Inf' || int($div) != $div;
