@@ -170,6 +170,24 @@ subtest 'native integers above 2**53 compare exactly with bignums' => sub {
     }
 };
 
+subtest 'floats keep all their digits when compared with bignums' => sub {
+    my $f = 0.1 + 0.2;
+    ok !json_equal(Math::BigFloat->new('0.3'), $f), 'BigFloat 0.3 is not 0.1 + 0.2';
+    ok json_equal(Math::BigFloat->new('0.30000000000000004'), $f), 'BigFloat 0.30000000000000004 is 0.1 + 0.2';
+    ok json_equal(Math::BigFloat->new('0.1'), 0.1), 'BigFloat 0.1 is still 0.1';
+    ok !json_equal(Math::BigFloat->new('1'), 1.0000000000000002), 'BigFloat 1 is not 1.0000000000000002';
+
+    my $v = JSONSchema::Validator->new(specification => 'Draft7',
+        schema => { exclusiveMaximum => 0.30000000000000004 });
+    my ($r, $e) = $v->validate_schema(Math::BigFloat->new('0.3'));
+    is $r, 1, 'BigFloat 0.3 < 0.30000000000000004' or diag errors_text($e);
+
+    $v = JSONSchema::Validator->new(specification => 'Draft7',
+        schema => { multipleOf => Math::BigFloat->new('0.1') });
+    ($r, $e) = $v->validate_schema(0.3);
+    is $r, 1, 'the float 0.3 is a multiple of BigFloat 0.1' or diag errors_text($e);
+};
+
 subtest 'strict uniqueItems' => sub {
     my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
     my $exp = '1000000000000000';
