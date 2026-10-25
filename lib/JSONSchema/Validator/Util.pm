@@ -77,8 +77,10 @@ sub resolve_uri {
     return $ref if $ref->scheme;
 
     if ("$ref" =~ /\A#(.*)\z/s) {
+        # URI::fragment runs a match of its own before reading its argument, which would reset $1
+        my $fragment = $1;
         my $resolved = $base->clone;
-        $resolved->fragment($1);
+        $resolved->fragment($fragment);
         return $resolved;
     }
     croak qq{cannot resolve relative reference "$ref" against non-hierarchical base "$base"};

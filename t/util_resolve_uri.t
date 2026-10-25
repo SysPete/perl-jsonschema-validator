@@ -36,5 +36,22 @@ is $r, 0, 'relative path ref against URN base fails';
 unlike errors_text($e), qr/authority/, 'no URI::urn death';
 like errors_text($e), qr/cannot resolve relative reference/, 'says why';
 
+subtest 'fragment replaces the fragment of a URN base' => sub {
+    is resolve_uri('#/a', 'urn:x:y#foo')->as_string, 'urn:x:y#/a', 'base with a fragment';
+    is resolve_uri('#/a', 'urn:x:y#')->as_string, 'urn:x:y#/a', 'base with an empty fragment';
+
+    for my $draft (qw/Draft4 Draft7/) {
+        my $id = $draft eq 'Draft4' ? 'id' : '$id';
+        my $v = JSONSchema::Validator->new(specification => $draft, schema => {
+            $id => "$urn#",
+            definitions => { a => { type => 'integer' } },
+            properties => { x => { '$ref' => '#/definitions/a' } },
+        });
+        my ($r, $e) = $v->validate_schema({ x => 'str' });
+        is $r, 0, "$draft: ref under an id ending in # is not the root";
+        like errors_text($e), qr{type mismatch .* \[instance path: /x\]}, "$draft: says why";
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
