@@ -6,7 +6,8 @@ use Test::More;
 
 use lib 't/lib';
 
-use Helper qw/test_dir detect_warnings/;
+use Helper qw/test_dir detect_warnings errors_text/;
+use JSON::PP ();
 use JSONSchema::Validator;
 use JSONSchema::Validator::Util qw( load_schema );
 
@@ -56,6 +57,52 @@ for my $validator_class (@{$JSONSchema::Validator::OAS_VALIDATORS}) {
     my $result = eval { my $validator = JSONSchema::Validator->new(resource => $resource) };
     is $result, undef, "check exception on wrong meta schema validation of $resource";
     like $@, qr/invalid schema/, "check exception message on wrong meta schema validation of $resource";
+}
+
+{
+    my $validator = JSONSchema::Validator->new(
+        specification => 'OAS30',
+        schema => {
+            openapi => '3.0.0',
+            info => { title => 'enum', version => '1' },
+            paths => {
+                '/enum' => {
+                    get => {
+                        parameters => [
+                            { name => 'int', in => 'query', schema => { type => 'integer', enum => [1, 2] } },
+                            { name => 'bool', in => 'query', schema => { type => 'boolean', enum => [JSON::PP::true] } },
+                        ],
+                        responses => { 200 => { description => 'ok' } },
+                    },
+                },
+            },
+        },
+    );
+
+    my $request = sub {
+        my ($name, $value) = @_;
+        return $validator->validate_request(
+            method => 'get',
+            openapi_path => '/enum',
+            parameters => { query => { $name => $value } },
+        );
+    };
+
+    my ($result, $errors) = $request->(int => '1');
+    is $result, 1, 'OAS30 query "1" is in integer enum [1, 2]'
+        or diag errors_text($errors);
+
+    ($result, $errors) = $request->(int => '3');
+    is $result, 0, 'OAS30 query "3" is not in integer enum [1, 2]';
+    like errors_text($errors), qr/instance is not of enums/, 'OAS30 integer enum says why';
+
+    ($result, $errors) = $request->(bool => '1');
+    is $result, 1, 'OAS30 query "1" is in boolean enum [true]'
+        or diag errors_text($errors);
+
+    ($result, $errors) = $request->(bool => '0');
+    is $result, 0, 'OAS30 query "0" is not in boolean enum [true]';
+    like errors_text($errors), qr/instance is not of enums/, 'OAS30 boolean enum says why';
 }
 
 ok detect_warnings() == 0, 'no warnings';

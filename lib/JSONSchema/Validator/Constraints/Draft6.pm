@@ -7,7 +7,7 @@ use warnings;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(is_type serialize unbool);
+use JSONSchema::Validator::Util qw(is_type json_equal);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
@@ -97,27 +97,7 @@ sub contains {
 sub const {
     my ($self, $instance, $const, $schema, $instance_path, $schema_path, $data) = @_;
 
-    my $result = 0;
-
-    # schema must have strict check
-    if ($self->check_type($const, 'boolean', 1)) {
-        $result = $self->check_type($instance, 'boolean')
-                    ? unbool($instance) eq unbool($const)
-                    : 0
-    } elsif ($self->check_type($const, 'object', 1) || $self->check_type($const, 'array', 1)) {
-        $result =   $self->check_type($instance, 'object') ||
-                    $self->check_type($instance, 'array')
-                    ? serialize($instance) eq serialize($const)
-                    : 0;
-    } elsif ($self->check_type($const, 'number', 1)) {
-        $result =   $self->check_type($instance, 'number')
-                    ? $const == $instance
-                    : 0;
-    } elsif (defined $const && defined $instance) {
-        $result = $const eq $instance;
-    } elsif (!defined $const && !defined $instance) {
-        $result = 1;
-    }
+    my $result = $self->strict ? json_equal($instance, $const) : $self->_loose_equal($instance, $const);
 
     return 1 if $result;
 

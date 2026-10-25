@@ -15,7 +15,7 @@ use URI 1.00 ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type
+    round is_type detect_type is_bignum json_equal
     data_section load_schema
 );
 
@@ -242,8 +242,51 @@ sub is_bool {
     return 0;
 }
 
+sub is_bignum {
+    my ($value) = @_;
+    return 0 unless blessed($value);
+    return $value->isa('Math::BigInt') || $value->isa('Math::BigFloat') ? 1 : 0;
+}
+
+sub json_equal {
+    my ($x, $y) = @_;
+
+    return defined $y ? 0 : 1 unless defined $x;
+    return 0 unless defined $y;
+
+    if (is_bool($x, 1) || is_bool($y, 1)) {
+        return 0 unless is_bool($x, 1) && is_bool($y, 1);
+        return ($x ? 1 : 0) == ($y ? 1 : 0) ? 1 : 0;
+    }
+
+    if (is_number($x, 1) || is_number($y, 1)) {
+        return 0 unless is_number($x, 1) && is_number($y, 1);
+        return $x == $y ? 1 : 0;
+    }
+
+    if (is_array($x) || is_array($y)) {
+        return 0 unless is_array($x) && is_array($y) && @$x == @$y;
+        for my $i (0 .. $#$x) {
+            return 0 unless json_equal($x->[$i], $y->[$i]);
+        }
+        return 1;
+    }
+
+    if (is_object($x) || is_object($y)) {
+        return 0 unless is_object($x) && is_object($y) && keys %$x == keys %$y;
+        for my $key (keys %$x) {
+            return 0 unless exists $y->{$key} && json_equal($x->{$key}, $y->{$key});
+        }
+        return 1;
+    }
+
+    return 0 unless is_string($x, 1) && is_string($y, 1);
+    return $x eq $y ? 1 : 0;
+}
+
 # params: $value, $is_strict
 sub is_integer {
+    return $_[0]->is_int ? 1 : 0 if is_bignum($_[0]);
     return 1 if B::svref_2object(\$_[0])->FLAGS & B::SVf_IOK();
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
@@ -253,6 +296,7 @@ sub is_integer {
 
 # params: $value, $is_strict
 sub is_number {
+    return 1 if is_bignum($_[0]);
     return 1 if B::svref_2object(\$_[0])->FLAGS & (B::SVf_IOK() | B::SVf_NOK());
     return 0 if $_[1]; # is strict
     return 0 if ref $_[0];
@@ -267,6 +311,7 @@ sub is_ref {
     return 0 if $ref eq 'JSON::PP::Boolean' ||
                 $ref eq 'HASH' ||
                 $ref eq 'ARRAY';
+    return 0 if is_bignum($_[0]);
     return 1;
 }
 

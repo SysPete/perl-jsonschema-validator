@@ -1,7 +1,9 @@
 Revision history for JSONSchema-Validator
+
 0.012  Not Released
     - Minimum Perl version is now 5.20
-
+    - Numbers decoded as Math::BigInt / Math::BigFloat are validated
+      as numbers; enum, const and uniqueItems compare numbers numerically
 
 0.011  2022-08-24
     - Added checking params from schema

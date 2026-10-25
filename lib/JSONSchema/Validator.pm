@@ -271,14 +271,8 @@ schema and use the C<schema> argument, this is something to be aware of.
 
 =head2 allow_bignum => 1
 
-The C<allow_bignum => 1> setting (available on L<JSON::XS> and
-L<Cpanel::JSON::XS>) on deserializers is not supported.
-
-When deserializing a request body with a JSON parser configured with
-C<allow_bignum => 1>, floats - even ones which fit into the regular
-float ranges - will be deserialized as C<Math::BigFloat>. Similarly,
-integers outside of the internal integer range are deserialized as
-C<Math::BigInt>. Numbers represented as C<Math::Big*> objects are not
-recognized as actual numbers and will fail validation.
+C<Math::BigInt> and C<Math::BigFloat> values, which deserializers such as
+L<JSON::XS> and L<Cpanel::JSON::XS> produce with C<< allow_bignum => 1 >>, are
+validated as numbers, with exact comparisons and C<multipleOf>.
 
 =cut
