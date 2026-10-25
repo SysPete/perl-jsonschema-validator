@@ -559,6 +559,7 @@ sub multipleOf {
 # ten between them capped where it can no longer change the answer.
 sub _is_bignum_multiple {
     my ($x, $m) = @_;
+    local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
     return 0 if $x->is_nan || $x->is_inf || $m->is_nan || $m->is_inf;
     return $x->is_zero ? 1 : 0 if $m->is_zero;
     return 1 if $x->is_zero;

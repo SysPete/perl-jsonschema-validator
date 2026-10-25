@@ -272,6 +272,8 @@ sub comparable_numbers {
     my ($x, $y) = @_;
     return ($x, $y) unless (ref $x && is_bignum($x)) || (ref $y && is_bignum($y));
     require Math::BigFloat;
+    # a global accuracy or precision set by the host program would round these
+    local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
     # a bignum must not go through a string: "1e1000000000" would be written out in full
     return map {
         !ref $_ ? Math::BigFloat->new(_exact_number_string($_))
@@ -324,6 +326,7 @@ sub json_equal {
         return ($x == $y ? 1 : 0) if abs($x) < 2**53 && abs($y) < 2**53;
         # == turns an IV into a float, so 2**53+1 would equal the float 2**53
         require Math::BigFloat;
+        local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
         return Math::BigFloat->new(_exact_number_string($x)) == Math::BigFloat->new(_exact_number_string($y)) ? 1 : 0;
     }
 

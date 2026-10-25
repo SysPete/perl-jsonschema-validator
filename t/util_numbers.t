@@ -203,6 +203,28 @@ subtest 'floats keep all their digits when compared with bignums' => sub {
     is $r, 1, 'the float 0.3 is a multiple of BigFloat 0.1' or diag errors_text($e);
 };
 
+subtest 'global bignum rounding settings are ignored' => sub {
+    my $seven = Math::BigInt->new(7);
+    my ($above, $half, $multiple) = ($big + 1, $big + Math::BigFloat->new('0.5'), Math::BigInt->new('1000000000000000000001'));
+    for my $setting (qw/accuracy precision/) {
+        my $value = $setting eq 'accuracy' ? 5 : 2;
+        Math::BigFloat->$setting($value);
+        Math::BigInt->$setting($value);
+
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { maximum => $big });
+        is( ($v->validate_schema($above))[0], 0, "$setting: 2**70+1 > 2**70" );
+        ok !json_equal($above, $half), "$setting: json_equal";
+        ok !json_equal(9007199254740993, 2**53), "$setting: json_equal of plain numbers";
+        $v = JSONSchema::Validator->new(specification => 'Draft7',
+            schema => { multipleOf => $seven });
+        is( ($v->validate_schema($multiple))[0], 1,
+            "$setting: 10**21+1 is a multiple of 7" );
+
+        Math::BigFloat->$setting(undef);
+        Math::BigInt->$setting(undef);
+    }
+};
+
 subtest 'strict uniqueItems' => sub {
     my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
     my $exp = '1000000000000000';
