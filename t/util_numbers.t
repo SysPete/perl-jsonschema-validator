@@ -170,6 +170,21 @@ subtest 'native integers above 2**53 compare exactly with bignums' => sub {
     }
 };
 
+subtest 'plain numbers above 2**53 compare exactly' => sub {
+    ok !json_equal(9007199254740993, 2**53), 'IV 2**53+1 is not the float 2**53';
+    ok json_equal(9007199254740992, 2**53), 'IV 2**53 is the float 2**53';
+    ok json_equal(1e300, 1e300), 'large floats';
+    ok !json_equal(18446744073709551615, 2**64), 'UV max is not the float 2**64';
+
+    for my $schema ({ const => 9007199254740993 }, { enum => [9007199254740993] }) {
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema);
+        my ($r, $e) = $v->validate_schema(2**53);
+        is $r, 0, (keys %$schema)[0] . ' 2**53+1 rejects the float 2**53';
+    }
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    is( ($v->validate_schema([9007199254740993, 2**53]))[0], 1, 'uniqueItems agrees' );
+};
+
 subtest 'floats keep all their digits when compared with bignums' => sub {
     my $f = 0.1 + 0.2;
     ok !json_equal(Math::BigFloat->new('0.3'), $f), 'BigFloat 0.3 is not 0.1 + 0.2';

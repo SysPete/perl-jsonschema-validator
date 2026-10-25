@@ -320,7 +320,11 @@ sub json_equal {
     if (!ref $x && !ref $y) {
         my $x_is_number = is_number($x, 1);
         return 0 unless $x_is_number == is_number($y, 1);
-        return ($x_is_number ? $x == $y : $x eq $y) ? 1 : 0;
+        return ($x eq $y ? 1 : 0) unless $x_is_number;
+        return ($x == $y ? 1 : 0) if abs($x) < 2**53 && abs($y) < 2**53;
+        # == turns an IV into a float, so 2**53+1 would equal the float 2**53
+        require Math::BigFloat;
+        return Math::BigFloat->new(_exact_number_string($x)) == Math::BigFloat->new(_exact_number_string($y)) ? 1 : 0;
     }
 
     if (is_bool($x, 1) || is_bool($y, 1)) {

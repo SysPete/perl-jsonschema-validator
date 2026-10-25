@@ -18,6 +18,8 @@ Revision history for JSONSchema-Validator
     - Minimum Perl version is now 5.20
     - Numbers decoded as Math::BigInt / Math::BigFloat are validated
       as numbers; enum, const and uniqueItems compare numbers numerically
+    - enum, const and uniqueItems compare integers above 2**53 exactly, so
+      9007199254740993 no longer matches 9007199254740992
     - JSONSchema::Validator::Util is documented as internal; its functions
       are not a public interface and may change
 
