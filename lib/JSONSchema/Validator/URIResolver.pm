@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp 'croak';
 
-use Scalar::Util 'weaken';
+use Scalar::Util qw(weaken refaddr);
 
 use URI;
 use URI::Escape;
@@ -45,6 +45,12 @@ my $SEARCH_ID = {
 
 # keywords whose values are instances, not schemas: a "$ref" inside one is data
 my %DATA_KEYWORDS = map { $_ => 1 } qw(enum const default examples example);
+
+# OpenAPI 3.0 objects whose keys are names, so a key such as "default" is not a keyword
+my %OAS_NAME_MAPS = map { $_ => 1 } qw(
+    paths responses content headers encoding links callbacks
+    schemas parameters requestBodies securitySchemes properties
+);
 
 sub new {
     my ($class, %params) = @_;
@@ -157,14 +163,19 @@ sub _croak_remote_disabled {
 }
 
 # Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
+# A JSON Schema is searched only where schemas can be; an OpenAPI document, whose references can
+# be almost anywhere, everywhere but data and extensions.
 sub _check_remote_refs {
-    my ($self, $data, $scope) = @_;
+    my ($self, $data, $scope, $seen) = @_;
+    $seen //= {};
 
     if (ref $data eq 'ARRAY') {
-        $self->_check_remote_refs($_, $scope) for @$data;
+        $self->_check_remote_refs($_, $scope, $seen) for @$data;
         return;
     }
     return unless ref $data eq 'HASH';
+    # a schema built in Perl can contain itself
+    return if $seen->{refaddr $data}++;
 
     # siblings of $ref are ignored (draft 4-7, OpenAPI 3.0), so are not searched
     if (exists $data->{'$ref'}) {
@@ -177,9 +188,17 @@ sub _check_remote_refs {
         $scope = eval { resolve_uri($id, $scope)->as_string } // $scope;
     }
 
+    my $is_oas = $self->validator->SPECIFICATION eq 'OAS30';
     for my $key (keys %$data) {
-        next if $DATA_KEYWORDS{$key} || $key =~ /^x-/;
-        $self->_check_remote_refs($data->{$key}, $scope);
+        my $value = $data->{$key};
+        my $is_name_map = $SEARCH_ID->{kv_value}{$key} || ($is_oas && $OAS_NAME_MAPS{$key});
+        if ($is_name_map && ref $value eq 'HASH') {
+            $self->_check_remote_refs($_, $scope, $seen) for values %$value;
+        } elsif ($SEARCH_ID->{value}{$key} || $SEARCH_ID->{arr_value}{$key}) {
+            $self->_check_remote_refs($value, $scope, $seen);
+        } elsif ($is_oas && !$DATA_KEYWORDS{$key} && $key !~ /^x-/) {
+            $self->_check_remote_refs($value, $scope, $seen);
+        }
     }
 }
 

@@ -117,6 +117,55 @@ like errors_text($e), qr/type mismatch/, 'and is applied';
 is( (JSONSchema::Validator::Draft7->new(schema => $file_ref)->validate_schema(1))[0], 1,
     'file: ref accepts a valid instance' );
 
+subtest 'the scan at new finds refs by schema position, not key name' => sub {
+    for my $case (
+        [properties => { default => $schema }],
+        [properties => { enum => $schema }],
+        [properties => { 'x-a' => $schema }],
+        [properties => { '$ref' => { type => 'string' }, a => $schema }],
+        [patternProperties => { '^examples$' => $schema }],
+        [definitions => { const => $schema }],
+        [dependencies => { example => $schema }],
+    ) {
+        my ($keyword, $value) = @$case;
+        my $name = "$keyword " . join(',', sort keys %$value);
+        like construct('JSONSchema::Validator::Draft7', schema => { $keyword => $value }), $blocked, $name;
+    }
+    like construct('JSONSchema::Validator::Draft4', schema => { properties => { default => $schema } }),
+        $blocked, 'Draft4 property named default';
+
+    my $oas = sub {
+        my (%extra) = @_;
+        return construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' }, paths => {}, %extra });
+    };
+    like $oas->(paths => { '/a' => { get => { responses => { default => $schema } } } }), $blocked,
+        'OAS30 default response';
+    like $oas->(components => { schemas => { default => $schema } }), $blocked, 'OAS30 schema named default';
+    like $oas->(components => { schemas => { a => { properties => { example => $schema } } } }), $blocked,
+        'OAS30 property named example';
+};
+
+subtest 'the scan at new skips what validation never resolves' => sub {
+    for my $schema_with_ref (
+        { 'my-annotation' => $schema },
+        { title => 'x', description => { '$ref' => 'http://example.invalid/s.json' } },
+        { properties => { a => { type => 'integer', 'x-meta' => $schema } } },
+    ) {
+        my $name = join ',', sort keys %$schema_with_ref;
+        is construct('JSONSchema::Validator::Draft7', schema => $schema_with_ref), 'ok', "Draft7 $name";
+    }
+};
+
+subtest 'the scan at new handles a cyclic schema' => sub {
+    my $cyclic = { type => 'object' };
+    $cyclic->{properties}{child} = $cyclic;
+    # a regression recurses without end, filling memory in seconds; stop it at the warning
+    local $SIG{__WARN__} = sub { die "@_" if $_[0] =~ /Deep recursion/; warn @_ };
+    is construct('JSONSchema::Validator::Draft7', schema => $cyclic, using_id_with_ref => 0), 'ok',
+        'builds';
+};
+
 subtest 'local files can be refused' => sub {
     my $path = test_dir('data/remote_fetching/integer.json');
     my %refuse = (
