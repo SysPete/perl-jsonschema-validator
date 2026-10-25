@@ -110,5 +110,41 @@ $v = JSONSchema::Validator->new(specification => 'Draft4',
 is $r, 0, 'Draft4 4 is not > BigFloat 4.0 exclusive';
 like errors_text($e), qr/^4 is equal to 4/, 'Draft4 exclusiveMinimum says why';
 
+subtest 'a huge exponent is never written out in full' => sub {
+    # written out, these need a petabyte, so a regression dies at once instead of filling memory
+    my $exp = '1000000000000000';
+    my $huge = Math::BigFloat->new("1e$exp");
+    my $tiny = Math::BigFloat->new("1e-$exp");
+
+    ok !json_equal($huge, 5), 'json_equal';
+    ok json_equal($huge, Math::BigFloat->new("10e" . ($exp - 1))), 'json_equal of equal values';
+
+    for my $case (
+        [Draft7 => { maximum => 5 }, $huge, 0, qr/^1e\+$exp is greater than 5/],
+        [Draft7 => { minimum => 5 }, $tiny, 0, qr/^1e-$exp is less than 5/],
+        [Draft7 => { minimum => 5 }, $huge, 1],
+        [Draft7 => { exclusiveMaximum => 5 }, $huge, 0, qr/^1e\+$exp is equal or greater than 5/],
+        [Draft4 => { maximum => 5, exclusiveMaximum => JSON::PP::true }, $huge, 0,
+            qr/^1e\+$exp is greater than 5/],
+        [Draft7 => { maximum => $huge }, 5, 1],
+        [Draft7 => { const => 5 }, $huge, 0],
+        [Draft7 => { multipleOf => 3 }, $huge, 0, qr/^instance is not multiple of 3/],
+        [Draft7 => { multipleOf => 8 }, $huge, 1],
+        [Draft7 => { multipleOf => 7 }, Math::BigFloat->new("7e$exp"), 1],
+        [Draft7 => { multipleOf => Math::BigFloat->new('0.3') }, $huge, 0],
+        [Draft7 => { multipleOf => Math::BigFloat->new('0.25') }, $huge, 1],
+        [Draft7 => { multipleOf => 1 }, $tiny, 0],
+        [Draft7 => { multipleOf => $tiny }, 1, 1],
+        [Draft7 => { multipleOf => $huge }, 5, 0, qr/^instance is not multiple of 1e\+$exp/],
+    ) {
+        my ($spec, $schema, $instance, $expected, $error) = @$case;
+        my $name = "$spec " . join(',', map { ref && ref ne 'JSON::PP::Boolean' ? $_->bsstr : $_ } %$schema) . " with " . (ref $instance ? $instance->bsstr : $instance);
+        my $v = JSONSchema::Validator->new(specification => $spec, schema => $schema);
+        my ($r, $e) = $v->validate_schema($instance);
+        is $r, $expected, $name or diag errors_text($e);
+        like errors_text($e), $error, "$name says why" if $error;
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

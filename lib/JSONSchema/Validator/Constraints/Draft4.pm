@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers resolve_uri exception_message);
+use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal comparable_numbers format_number resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -100,7 +100,7 @@ sub minimum {
     my ($x, $min) = comparable_numbers($instance, $minimum);
     return 1 if $x >= $min;
     push @{$data->{errors}}, error(
-        message => "${instance} is less than ${minimum}",
+        message => format_number($instance) . " is less than " . format_number($minimum),
         instance_path => $instance_path,
         schema_path => $schema_path
     );
@@ -113,7 +113,7 @@ sub maximum {
     my ($x, $max) = comparable_numbers($instance, $maximum);
     return 1 if $x <= $max;
     push @{$data->{errors}}, error(
-        message => "${instance} is greater than ${maximum}",
+        message => format_number($instance) . " is greater than " . format_number($maximum),
         instance_path => $instance_path,
         schema_path => $schema_path
     );
@@ -135,7 +135,7 @@ sub exclusiveMaximum {
     return 1 if $x != $max;
 
     push @{$data->{errors}}, error(
-        message => "${instance} is equal to ${maximum}",
+        message => format_number($instance) . " is equal to " . format_number($maximum),
         instance_path => $instance_path,
         schema_path => $schema_path
     );
@@ -157,7 +157,7 @@ sub exclusiveMinimum {
     return 1 if $x != $min;
 
     push @{$data->{errors}}, error(
-        message => "${instance} is equal to ${minimum}",
+        message => format_number($instance) . " is equal to " . format_number($minimum),
         instance_path => $instance_path,
         schema_path => $schema_path
     );
@@ -538,10 +538,7 @@ sub multipleOf {
     my $result = 1;
 
     if (is_bignum($instance) || is_bignum($multipleOf)) {
-        my ($x, $m) = comparable_numbers($instance, $multipleOf);
-        # bdiv rounds to 40 digits, so a huge quotient can look whole; bmod is exact.
-        # babs because the Math::BigFloat bundled with Perl 5.24 and older gets bmod wrong for mixed signs.
-        $result = $x->babs->bmod($m->babs)->is_zero ? 1 : 0;
+        $result = _is_bignum_multiple(comparable_numbers($instance, $multipleOf));
     } else {
         my $div = $instance / $multipleOf;
         $result = 0 if $div == 'Inf' || int($div) != $div;
@@ -550,11 +547,37 @@ sub multipleOf {
     return 1 if $result;
 
     push @{$data->{errors}}, error(
-        message => "instance is not multiple of $multipleOf",
+        message => "instance is not multiple of " . format_number($multipleOf),
         instance_path => $instance_path,
         schema_path => $schema_path
     );
     return 0;
+}
+
+# bdiv rounds to 40 digits, so a huge quotient can look whole, and bmod lines up the exponents,
+# which writes 1e1000000000 out in full; so divide the integer mantissas, with the power of
+# ten between them capped where it can no longer change the answer.
+sub _is_bignum_multiple {
+    my ($x, $m) = @_;
+    return 0 if $x->is_nan || $x->is_inf || $m->is_nan || $m->is_inf;
+    return $x->is_zero ? 1 : 0 if $m->is_zero;
+    return 1 if $x->is_zero;
+
+    # babs because the Math::BigFloat bundled with Perl 5.24 and older gets signs wrong in parts
+    my ($xm, $xe) = $x->babs->parts;
+    my ($mm, $me) = $m->babs->parts;
+    my $shift = $xe - $me;
+    if ($shift < 0) {
+        # $xm / ($mm * 10**-$shift) can only be whole if 10**-$shift fits in $xm
+        return 0 if -$shift > $xm->length;
+        $mm->bmul(Math::BigInt->new(10)->bpow(-$shift));
+    } else {
+        # 10**$shift adds only 2s and 5s, and $mm has fewer than 4 * length of either
+        my $cap = 4 * $mm->length;
+        $shift = $cap if $shift > $cap;
+        $xm->bmul(Math::BigInt->new(10)->bpow($shift));
+    }
+    return $xm->bmod($mm)->is_zero ? 1 : 0;
 }
 
 sub not {

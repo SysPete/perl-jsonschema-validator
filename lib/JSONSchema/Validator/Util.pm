@@ -15,7 +15,7 @@ use URI 1.00 ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type is_bignum json_equal comparable_numbers
+    round is_type detect_type is_bignum json_equal comparable_numbers format_number
     data_section load_schema resolve_uri exception_message
 );
 
@@ -272,7 +272,18 @@ sub comparable_numbers {
     my ($x, $y) = @_;
     return ($x, $y) unless (ref $x && is_bignum($x)) || (ref $y && is_bignum($y));
     require Math::BigFloat;
-    return map { Math::BigFloat->new(_exact_number_string($_)) } $x, $y;
+    # a bignum must not go through a string: "1e1000000000" would be written out in full
+    return map {
+        !ref $_ ? Math::BigFloat->new(_exact_number_string($_))
+        : $_->isa('Math::BigFloat') ? $_->copy
+        : Math::BigFloat->new($_)
+    } $x, $y;
+}
+
+sub format_number {
+    my ($n) = @_;
+    return "$n" unless ref $n && is_bignum($n) && $n->isa('Math::BigFloat') && !$n->is_nan;
+    return $n->is_inf || abs($n->exponent) <= 100 ? "$n" : $n->bsstr;
 }
 
 sub _exact_number_string {
