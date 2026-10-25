@@ -733,3 +733,17 @@ Where the work differed from the tasks above:
 - The acceptance harness does not run on Windows: its dependencies won't
   build for Perl 5.20 there and crash Perl 5.44. Linux and macOS run it.
 - GitHub Actions are pinned to commit SHAs.
+
+Changes made after this plan was marked done:
+
+- A blocked remote reference makes `new()` croak (2d878c9) instead of
+  failing validation as Task 6 describes. `new()` searches the schema and
+  `documents`; a reference in a document loaded later, through `file:` for
+  example, still fails when validation reaches it.
+- `exception:` error messages drop Perl's "at FILE line N." locations
+  (2d878c9), an exception to the Global Constraints' wording rule that
+  AGENTS.md records.
+- CI gained a `history` job that rejects merge commits and a single
+  required `CI passed` job (007d77e), beyond Task 1's matrix.
+- `bench/` gained `compare.pl`, a second machine's baseline and the
+  procedure for recording one (b73b8fc, c7db5dd), beyond Task 8.

@@ -104,7 +104,9 @@ acceptance run actually executed before citing it.
 - The `JSONSchema::Validator::Error` objects for Draft 4/6/7 and `OAS30` are
   a stable interface: fields (`message`, `instance_path`, `schema_path`,
   `context`), `to_string` / `TO_JSON` output and existing message wording do
-  not change. New messages may be added.
+  not change. New messages may be added. The one exception: since 0.012,
+  `exception:` messages drop the "at FILE line N." locations Perl adds,
+  because they can reach API clients.
 - `validate_request` / `validate_response` keep returning
   `($result, $errors, $warnings)`.
 - Bug fixes may change validation results; note them in `Changes`.
