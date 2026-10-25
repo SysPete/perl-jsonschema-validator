@@ -54,6 +54,8 @@ sub new {
     my $base_uri    = $params{base_uri} // '';
 
     my $scheme_handlers     = $params{scheme_handlers} // {};
+    my $fetch_remote        = $params{fetch_remote} // 0;
+    my $documents           = $params{documents} // {};
 
     weaken($validator);
 
@@ -62,24 +64,39 @@ sub new {
         cache => {
             $base_uri => $schema
         },
-        scheme_handlers => $scheme_handlers
+        scheme_handlers => $scheme_handlers,
+        fetch_remote => $fetch_remote
     };
 
     bless $self, $class;
 
-    if ('#' eq substr $base_uri, -1) {
-        $base_uri = substr $base_uri, 0, - 1;
-        $self->{cache}{$base_uri} = $schema;
-    }
+    $base_uri = $self->_add_document($base_uri, $schema);
 
     $self->cache_id(URI->new($base_uri), $schema) if $validator->using_id_with_ref && ref $schema eq 'HASH';
+
+    for my $document_uri (keys %$documents) {
+        my $document = $documents->{$document_uri};
+        my $key = $self->_add_document($document_uri, $document);
+        $self->cache_id(URI->new($key), $document) if $validator->using_id_with_ref && ref $document eq 'HASH';
+    }
 
     return $self;
 }
 
 sub validator { shift->{validator} }
 sub scheme_handlers { shift->{scheme_handlers} }
+sub fetch_remote { shift->{fetch_remote} }
 sub cache { shift->{cache} }
+
+# Caches the schema under the uri without an empty fragment; returns that key.
+sub _add_document {
+    my ($self, $uri, $schema) = @_;
+
+    $uri = substr $uri, 0, -1 if '#' eq substr $uri, -1;
+    $self->{cache}{$uri} = $schema;
+
+    return $uri;
+}
 
 # self - URIResolver
 # origin_uri - URI
@@ -106,7 +123,17 @@ sub cache_resolve {
 
     return $self->cache->{$uri->as_string} if exists $self->cache->{$uri->as_string};
 
-    my $schema = bundled_schema($uri->as_string) // load_schema($uri->as_string, $self->scheme_handlers);
+    my $schema = bundled_schema($uri->as_string);
+
+    if (!defined $schema) {
+        my $is_web = $scheme && ($scheme eq 'http' || $scheme eq 'https');
+
+        # A handler for the scheme is the caller opting in to it.
+        croak sprintf('Remote fetching is disabled: cannot load %s. Preload it with "documents" or pass fetch_remote => 1', $uri->as_string)
+            if $is_web && !$self->fetch_remote && !exists $self->scheme_handlers->{$scheme};
+
+        $schema = load_schema($uri->as_string, $self->scheme_handlers);
+    }
 
     $self->cache->{$uri->as_string} = $schema;
 

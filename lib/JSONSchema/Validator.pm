@@ -43,7 +43,7 @@ Parameters:
 
 =over 1
 
-=item resources
+=item resource
 
 To get schema by uri
 
@@ -65,8 +65,17 @@ To specify base uri of schema.
 This parameter used to build absolute path by relative reference in schema.
 By default C<base_uri> is equal to the resource path if the resource parameter is specified otherwise the C<$id> key in the schema.
 
+=item fetch_remote
+
+Allow loading C<http> and C<https> references found in the schema. Default value is 0.
+
+=item documents
+
+Hash reference of URI to schema, preloaded so references to those URIs need no loading.
+
 =back
 
+Both options are passed to the validator class; see L<JSONSchema::Validator::Draft4>.
 Additional parameters need to be looked at in a specific validator class.
 Currently there are validators: JSONSchema::Validator::Draft4, JSONSchema::Validator::Draft6, JSONSchema::Validator::Draft7, JSONSchema::Validator::OAS30.
 

@@ -1,6 +1,9 @@
 Revision history for JSONSchema-Validator
 
 0.012  Not Released
+    - INCOMPATIBLE: http/https references are no longer fetched unless
+      fetch_remote => 1 is passed or a scheme handler is given; documents can
+      be preloaded with the new documents option
     - References resolve against URN base URIs (urn:uuid:...) instead of
       dying; a relative path against such a base is a validation error
     - The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas resolve by their
