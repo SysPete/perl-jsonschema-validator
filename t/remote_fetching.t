@@ -302,6 +302,39 @@ subtest 'the scan at new checks OAS30 discriminator mappings' => sub {
         $blocked, 'a mapping to an http URI';
 };
 
+subtest 'the scan at new applies the $id of a ref target once' => sub {
+    my $v = eval { JSONSchema::Validator::Draft7->new(schema => {
+        '$id' => 'http://x.invalid/a/',
+        properties => { p => { '$id' => 'b/', properties => { q => { '$ref' => '#' } } } } }) };
+    is $@, '', 'new does not die';
+    SKIP: {
+        skip "no validator", 1 unless $v;
+        my ($r) = $v->validate_schema({ p => { q => { q => 5 } } });
+        is $r, 1, 'and validation loads nothing';
+    }
+};
+
+subtest 'the scan at new skips x- keys only in OAS30 objects that allow extensions' => sub {
+    my $response = { description => 'ok', content => { 'application/json' => { schema => $schema } } };
+    my $callback = { '{$request.body#/url}' => { post => { responses => { 200 => $response } } } };
+    my $oas = sub {
+        my (%extra) = @_;
+        return construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' }, paths => {}, %extra });
+    };
+    like $oas->(components => { responses => { 'x-r' => $response } }), $blocked,
+        'a response named x-r in components';
+    like $oas->(components => { callbacks => { 'x-cb' => $callback } }), $blocked,
+        'a callback named x-cb in components';
+    like $oas->(paths => { '/a' => { post => { responses => { 200 => { description => 'ok' } },
+            callbacks => { 'x-cb' => $callback } } } }), $blocked,
+        'a callback named x-cb in an operation';
+    is $oas->(paths => { '/a' => { post => { responses => { 200 => { description => 'ok' } },
+            callbacks => { cb => { 'x-vendor' => $schema } } } } }), 'ok',
+        'a Callback Object extension';
+};
+
+
 subtest 'the scan at new loads nothing' => sub {
     my @loaded;
     my $v = eval { JSONSchema::Validator::Draft7->new(schema => {

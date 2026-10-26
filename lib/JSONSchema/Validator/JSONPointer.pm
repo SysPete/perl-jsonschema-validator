@@ -51,7 +51,7 @@ sub unescape {
 sub new {
     my ($class, %params) = @_;
 
-    my ($scope, $value, $validator) = @params{qw/scope value validator/};
+    my ($scope, $value, $validator, $resolver) = @params{qw/scope value validator resolver/};
 
     croak 'JSONPointer: scope is required' unless defined $scope;
     croak 'JSONPointer: validator is required' unless $validator;
@@ -61,7 +61,8 @@ sub new {
     my $self = {
         scope => $scope,
         value => $value,
-        validator => $validator
+        validator => $validator,
+        resolver => $resolver
     };
 
     bless $self, $class;
@@ -70,6 +71,13 @@ sub new {
 }
 
 sub validator { shift->{validator} }
+
+# the validator does not hold its resolver yet while the resolver's new() scans the schema
+sub resolver {
+    my ($self) = @_;
+    return $self->{resolver} // $self->validator->resolver;
+}
+
 sub scope { shift->{scope} }
 sub value { shift->{value} }
 
@@ -128,13 +136,14 @@ sub _walk {
     return __PACKAGE__->new(
         value => $current_value,
         scope => $current_scope,
-        validator => $self->validator
+        validator => $self->validator,
+        resolver => $self->{resolver}
     )
 }
 
 sub _enter {
     my ($self, $current_scope, $current_value, $follow, $visited) = @_;
-    my $resolver = $self->validator->resolver;
+    my $resolver = $self->resolver;
 
     while ($follow && ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
         my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);

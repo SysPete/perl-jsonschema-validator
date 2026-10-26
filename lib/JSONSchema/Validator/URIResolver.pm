@@ -52,9 +52,6 @@ my %OAS_NAME_MAPS = map { $_ => 1 } qw(
     schemas parameters requestBodies securitySchemes properties
 );
 
-# OpenAPI 3.0 name maps that allow extensions, so an x- key there is not a name
-my %OAS_EXTENSIBLE_MAPS = map { $_ => 1 } qw(paths responses callbacks);
-
 sub new {
     my ($class, %params) = @_;
 
@@ -99,8 +96,6 @@ sub new {
 
     # fail now, not when some later instance reaches the reference
     unless ($fetch_remote) {
-        # document_get finds the resolver through the validator, which gets it only when new returns
-        local $validator->{resolver} = $self;
         $self->_check_remote_refs($schema, $base_uri);
         $self->_check_remote_refs($documents->{$_}, $_) for keys %$documents;
     }
@@ -195,11 +190,12 @@ sub _croak_remote_disabled {
 }
 
 # Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
-# A JSON Schema is searched only where schemas can be; an OpenAPI document, whose references can
-# be almost anywhere, everywhere but data and extensions. A reference into a preloaded document is
-# followed, so the scan also reaches subschemas that only a local $ref points to.
+# The scan follows local references, and searches a JSON Schema only where schemas can be and an
+# OpenAPI document everywhere but data and the extensions of objects that allow them.
+# context: ref_target - data is a $ref target, whose $id is already in scope (as in validation);
+# components - data is the OpenAPI Components Object
 sub _check_remote_refs {
-    my ($self, $data, $scope, $seen) = @_;
+    my ($self, $data, $scope, $seen, %context) = @_;
     $seen //= {};
 
     if (ref $data eq 'ARRAY') {
@@ -217,7 +213,7 @@ sub _check_remote_refs {
     }
 
     my $id = $data->{$self->validator->ID_FIELD};
-    if ($self->validator->using_id_with_ref && defined $id && !ref $id) {
+    if ($self->validator->using_id_with_ref && !$context{ref_target} && defined $id && !ref $id) {
         $scope = eval { resolve_uri($id, $scope)->as_string } // $scope;
     }
 
@@ -226,8 +222,10 @@ sub _check_remote_refs {
         my $value = $data->{$key};
         my $is_name_map = $SEARCH_ID->{kv_value}{$key} || ($is_oas && $OAS_NAME_MAPS{$key});
         if ($is_name_map && ref $value eq 'HASH') {
+            # the Paths and Responses Objects allow extensions; components.responses keys are names
+            my $is_extensible = $is_oas && ($key eq 'paths' || ($key eq 'responses' && !$context{components}));
             for my $name (keys %$value) {
-                next if $is_oas && $OAS_EXTENSIBLE_MAPS{$key} && $name =~ /^x-/;
+                next if $is_extensible && $name =~ /^x-/;
                 $self->_check_remote_refs($value->{$name}, $scope, $seen);
             }
         } elsif ($SEARCH_ID->{value}{$key} || $SEARCH_ID->{arr_value}{$key}) {
@@ -239,7 +237,7 @@ sub _check_remote_refs {
                 $self->_check_remote_ref(discriminator_ref($target), $scope, $seen) if defined $target && !ref $target;
             }
         } elsif ($is_oas && !$DATA_KEYWORDS{$key} && $key !~ /^x-/) {
-            $self->_check_remote_refs($value, $scope, $seen);
+            $self->_check_remote_refs($value, $scope, $seen, $key eq 'components' ? (components => 1) : ());
         }
     }
 }
@@ -258,7 +256,7 @@ sub _check_remote_ref {
         my @target = eval {
             $self->fragment_resolve($uri, $self->cache->{$document->as_string}, cached_only => 1)
         } or return;
-        $self->_check_remote_refs($target[1], $target[0], $seen);
+        $self->_check_remote_refs($target[1], $target[0], $seen, ref_target => 1);
         return;
     }
 
@@ -285,7 +283,8 @@ sub fragment_resolve {
     my $pointer = json_pointer->new(
         scope => $uri->as_string,
         value => $schema,
-        validator => $self->validator
+        validator => $self->validator,
+        resolver => $self
     );
 
     # try to use fragment as json pointer
