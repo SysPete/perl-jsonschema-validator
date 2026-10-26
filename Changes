@@ -12,9 +12,10 @@ Revision history for JSONSchema-Validator
             documents => { 'https://example.com/s.json' => $s });
       A scheme_handlers entry for http or https also allows that scheme.
       The bundled Draft 4, 6, 7 and OpenAPI 3.0 meta-schemas need neither.
-      new() searches the schema and documents; a reference in a document
-      loaded later, through a file: reference for example, fails when
-      validation reaches it.
+      new() searches the schema and documents, including the parts reached
+      through local $refs and OpenAPI 3.0 discriminator mappings; a
+      reference in a document loaded later, through a file: reference for
+      example, fails when validation reaches it.
     - OpenAPI 3.0 validate_request and validate_response return a reference
       that fails to load as an "exception:" error, along with the errors
       and warnings found before it, instead of dying; argument errors and

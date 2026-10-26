@@ -9,7 +9,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::Error 'error';
-use JSONSchema::Validator::Util qw(detect_type resolve_uri exception_message);
+use JSONSchema::Validator::Util qw(detect_type resolve_uri exception_message discriminator_ref);
 
 use parent 'JSONSchema::Validator::Constraints::Draft4';
 
@@ -157,7 +157,7 @@ sub discriminator {
 
     my $ref = $mapping->{$type};
     if ($ref) {
-        $ref = $self->__detect_discriminator_ref($ref);
+        $ref = discriminator_ref($ref);
     } else {
         # OAS 3.0 Components keys are limited to this pattern.
         return $fail->(qq{discriminator value "${type}" is not a schema name})
@@ -212,13 +212,5 @@ sub deprecated {
 sub dependencies { 1 }
 sub additionalItems { 1 }
 sub patternProperties { 1 }
-
-sub __detect_discriminator_ref {
-    my ($self, $ref) = @_;
-    # heuristic
-    return $ref if $ref =~ m|/|;
-    return $ref if $ref =~ m/\.json$/;
-    return '#/components/schemas/' . $ref;
-}
 
 1;

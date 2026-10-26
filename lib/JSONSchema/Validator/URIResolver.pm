@@ -14,7 +14,7 @@ use Encode;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::BundledSchemas 'bundled_schema';
-use JSONSchema::Validator::Util qw( load_schema resolve_uri exception_message is_load_failure resource_name );
+use JSONSchema::Validator::Util qw( load_schema resolve_uri exception_message is_load_failure resource_name discriminator_ref );
 
 # what keys contain the schema? Required to find an $id in a schema
 my $SEARCH_ID = {
@@ -51,6 +51,9 @@ my %OAS_NAME_MAPS = map { $_ => 1 } qw(
     paths responses content headers encoding links callbacks
     schemas parameters requestBodies securitySchemes properties
 );
+
+# OpenAPI 3.0 name maps that allow extensions, so an x- key there is not a name
+my %OAS_EXTENSIBLE_MAPS = map { $_ => 1 } qw(paths responses callbacks);
 
 sub new {
     my ($class, %params) = @_;
@@ -96,6 +99,8 @@ sub new {
 
     # fail now, not when some later instance reaches the reference
     unless ($fetch_remote) {
+        # document_get finds the resolver through the validator, which gets it only when new returns
+        local $validator->{resolver} = $self;
         $self->_check_remote_refs($schema, $base_uri);
         $self->_check_remote_refs($documents->{$_}, $_) for keys %$documents;
     }
@@ -191,7 +196,8 @@ sub _croak_remote_disabled {
 
 # Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
 # A JSON Schema is searched only where schemas can be; an OpenAPI document, whose references can
-# be almost anywhere, everywhere but data and extensions.
+# be almost anywhere, everywhere but data and extensions. A reference into a preloaded document is
+# followed, so the scan also reaches subschemas that only a local $ref points to.
 sub _check_remote_refs {
     my ($self, $data, $scope, $seen) = @_;
     $seen //= {};
@@ -201,12 +207,12 @@ sub _check_remote_refs {
         return;
     }
     return unless ref $data eq 'HASH';
-    # a schema built in Perl can contain itself
-    return if $seen->{refaddr $data}++;
+    # a schema built in Perl can contain itself, and a $ref can lead back to where it is
+    return if $seen->{"$scope\0" . refaddr $data}++;
 
     # siblings of $ref are ignored (draft 4-7, OpenAPI 3.0), so are not searched
     if (exists $data->{'$ref'}) {
-        $self->_check_remote_ref($data->{'$ref'}, $scope) unless ref $data->{'$ref'};
+        $self->_check_remote_ref($data->{'$ref'}, $scope, $seen) unless ref $data->{'$ref'};
         return;
     }
 
@@ -220,9 +226,18 @@ sub _check_remote_refs {
         my $value = $data->{$key};
         my $is_name_map = $SEARCH_ID->{kv_value}{$key} || ($is_oas && $OAS_NAME_MAPS{$key});
         if ($is_name_map && ref $value eq 'HASH') {
-            $self->_check_remote_refs($_, $scope, $seen) for values %$value;
+            for my $name (keys %$value) {
+                next if $is_oas && $OAS_EXTENSIBLE_MAPS{$key} && $name =~ /^x-/;
+                $self->_check_remote_refs($value->{$name}, $scope, $seen);
+            }
         } elsif ($SEARCH_ID->{value}{$key} || $SEARCH_ID->{arr_value}{$key}) {
             $self->_check_remote_refs($value, $scope, $seen);
+        } elsif ($is_oas && $key eq 'discriminator') {
+            my $mapping = ref $value eq 'HASH' ? $value->{mapping} : undef;
+            next unless ref $mapping eq 'HASH';
+            for my $target (values %$mapping) {
+                $self->_check_remote_ref(discriminator_ref($target), $scope, $seen) if defined $target && !ref $target;
+            }
         } elsif ($is_oas && !$DATA_KEYWORDS{$key} && $key !~ /^x-/) {
             $self->_check_remote_refs($value, $scope, $seen);
         }
@@ -230,18 +245,29 @@ sub _check_remote_refs {
 }
 
 sub _check_remote_ref {
-    my ($self, $ref, $scope) = @_;
+    my ($self, $ref, $scope, $seen) = @_;
 
     # a reference that can't be resolved at all is reported by validation
     my $uri = eval { resolve_uri($ref, $scope) } or return;
+
+    my $document = $uri->clone;
+    $document->fragment(undef);
+
+    if (exists $self->cache->{$uri->as_string} || exists $self->cache->{$document->as_string}) {
+        # a walk that stops at a $ref returns that $ref object, which is then checked like any other
+        my @target = eval {
+            $self->fragment_resolve($uri, $self->cache->{$document->as_string}, cached_only => 1)
+        } or return;
+        $self->_check_remote_refs($target[1], $target[0], $seen);
+        return;
+    }
+
     my $scheme = $uri->scheme // '';
     return unless $scheme eq 'http' || $scheme eq 'https';
     return if exists $self->scheme_handlers->{$scheme};
 
     return if $self->is_preloaded($uri);
 
-    my $document = $uri->clone;
-    $document->fragment(undef);
     _croak_remote_disabled($document);
 }
 

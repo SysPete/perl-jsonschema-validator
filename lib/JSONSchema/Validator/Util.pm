@@ -17,6 +17,7 @@ our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
     round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number
     data_section load_schema resolve_uri exception_message is_load_failure resource_name
+    discriminator_ref
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -145,6 +146,13 @@ sub _local_path {
     return undef if defined $scheme && $scheme ne 'file';
     my $path = defined $scheme ? $uri->file : "$resource";
     return defined $path && length $path ? $path : undef;
+}
+
+# An OAS30 discriminator mapping value is a reference only if it looks like one, else a schema name.
+sub discriminator_ref {
+    my ($value) = @_;
+    return $value if $value =~ m|/| || $value =~ m/\.json$/;
+    return '#/components/schemas/' . $value;
 }
 
 # Errors can reach API clients, so a local file is named by its base name, not its server path.

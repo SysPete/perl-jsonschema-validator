@@ -246,5 +246,76 @@ subtest 'local files can be refused' => sub {
     }
 };
 
+subtest 'the scan at new follows local refs into any part of the schema' => sub {
+    like construct('JSONSchema::Validator::Draft7', schema => {
+            '$defs' => { a => $schema }, properties => { p => { '$ref' => '#/$defs/a' } } }),
+        $blocked, 'a ref into $defs';
+    like construct('JSONSchema::Validator::Draft7', schema => { '$ref' => 'http://e.invalid/doc.json#/defs/a' },
+            documents => { 'http://e.invalid/doc.json' => { defs => { a => $schema } } }),
+        $blocked, 'a ref into a container in a document';
+};
+
+subtest 'the scan at new handles local refs that form a cycle' => sub {
+    # unbounded recursion ends in an "Out of memory!" no eval can catch, so stop at the first warning
+    my $record = $SIG{__WARN__};
+    local $SIG{__WARN__} = sub { die "deep recursion\n" if $_[0] =~ /^Deep recursion/; $record->(@_) };
+
+    is construct('JSONSchema::Validator::Draft7', schema => {
+            '$defs' => { a => { '$ref' => '#/$defs/b' }, b => { '$ref' => '#/$defs/a' } },
+            properties => { p => { '$ref' => '#/$defs/a' } } }),
+        'ok', 'builds';
+};
+
+subtest 'the scan at new skips x- extensions of OAS30 paths and responses' => sub {
+    my $ok = { 200 => { description => 'ok' } };
+    is construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' },
+            paths => { 'x-vendor' => $schema, '/a' => { get => { responses => $ok } } } }),
+        'ok', 'a Paths Object extension';
+    is construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' },
+            paths => { '/a' => { get => { responses => { %$ok, 'x-vendor' => $schema } } } } }),
+        'ok', 'a Responses Object extension';
+    like construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' }, paths => {},
+            components => { schemas => { 'x-named' => $schema } } }),
+        $blocked, 'a schema named x-named is still a schema';
+};
+
+subtest 'the scan at new checks a shared subschema under each scope' => sub {
+    # the key names change the hash order, so both visit orders occur
+    for my $i (1 .. 20) {
+        my $shared = { '$ref' => 'other.json' };
+        like construct('JSONSchema::Validator::Draft7', schema => { properties => {
+                "a$i" => $shared,
+                "b$i" => { '$id' => 'http://example.invalid/b.json', properties => { c => $shared } } } }),
+            qr/^Remote fetching is disabled: cannot load http:\/\/example\.invalid\/other\.json\./,
+            "properties a$i and b$i";
+    }
+};
+
+subtest 'the scan at new checks OAS30 discriminator mappings' => sub {
+    like construct('JSONSchema::Validator::OAS30', schema => {
+            openapi => '3.0.3', info => { title => 't', version => '1' }, paths => {},
+            components => { schemas => { Pet => { type => 'object', discriminator => {
+                propertyName => 't', mapping => { dog => 'http://example.invalid/s.json' } } } } } }),
+        $blocked, 'a mapping to an http URI';
+};
+
+subtest 'the scan at new loads nothing' => sub {
+    my @loaded;
+    my $v = eval { JSONSchema::Validator::Draft7->new(schema => {
+            '$ref' => '#/definitions/a/properties/b',
+            definitions => { a => { '$ref' => 'urn:example:a' } } },
+        scheme_handlers => { urn => sub {
+            push @loaded, "$_[0]";
+            (\'{"properties":{"b":{"type":"integer"}}}', 'JSON') } }) };
+    is $@, '', 'new does not die';
+    is_deeply \@loaded, [], 'no handler is called at new';
+    my ($r) = $v->validate_schema('x');
+    is $r, 0, 'validation follows the reference';
+    is_deeply \@loaded, ['urn:example:a'], 'and loads it then';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
