@@ -167,3 +167,7 @@ Work is planned and reviewed with the
    when context runs out;
    [rethink](https://github.com/Ovid/paad/tree/main/plugins/paad/skills/rethink)
    to check a recommendation before acting on it.
+
+paad skills write their output under `docs/paad/`, not `paad/`: where a
+skill names a `paad/...` path (reports, backlogs, handoffs), read and write
+`docs/paad/...` instead.
