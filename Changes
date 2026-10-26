@@ -8,14 +8,18 @@ Revision history for JSONSchema-Validator
       by numeric value, and nested arrays and objects as JSON values:
       "1.0" and 1, and [1.0] and [1], are duplicates
     - A reference with a scheme that has no handler and is not http, https
-      or file is refused; a drive-letter path goes to the file handler
+      or file is refused; a path with no scheme or a drive letter goes to
+      the file scheme handler when one is given
     - A document loaded during validation whose $id names an entry already
-      known fails with an exception: error instead of replacing it
+      known fails with an exception: error instead of replacing it, naming
+      a local file by its base name
     - An $id ending in an empty fragment, as Draft 4 ids usually do, is
       found by a $ref with or without the #
     - A schema whose root $ref points into its own definitions resolves
     - An OAS30 discriminator value without a mapping entry is matched as a
-      schema name under #/components/schemas
+      schema name under #/components/schemas; an instance without the
+      discriminator property, or whose value there is not a string, fails
+      with an error
     - INCOMPATIBLE: http/https references are no longer fetched by default,
       and new() now croaks on a schema containing one. To upgrade, either
       pass fetch_remote => 1 to restore the old behaviour, or preload the
