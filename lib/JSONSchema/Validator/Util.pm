@@ -496,16 +496,16 @@ sub is_string {
     return !(ref $_[0]) && defined $_[0];
 }
 
-# Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
 sub is_load_failure {
     my ($exception) = @_;
     return !ref $exception && $exception =~ /\A(?:Failed to load resource |Remote fetching is disabled: )/;
 }
 
+# Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
 sub exception_message {
     my ($message) = @_;
     # any file name, since a handler that dies may live in app.psgi or bin/app
-    $message =~ s/ at (?:(?! at ).)+? line \d+(?:, <[^>]*> (?:line|chunk) \d+)?\.?(?=\s|\z)//g;
+    $message =~ s/ at (?:(?! at ).)+? line \d+(?:, <[^>\s]*> (?:line|chunk) \d+)?(?:\.?(?=\s|\z)|(?=, (?:near "|at EOF|at end of line)))//g;
     $message =~ s/\s+/ /g;
     $message =~ s/\A | \z//g;
     return $message;

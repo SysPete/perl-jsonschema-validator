@@ -30,7 +30,8 @@ Revision history for JSONSchema-Validator
     - validate_schema leaves the validator's scope as it found it when it
       dies
     - Error messages for exceptions raised during validation no longer
-      include the source file and line ("at .../Foo.pm line 12.")
+      include the source file and line ("at .../Foo.pm line 12."), including
+      in compile errors
     - References resolve against URN base URIs (urn:uuid:...) instead of
       dying; a relative path against such a base is a validation error
       in a $ref, and makes new() croak in an $id
