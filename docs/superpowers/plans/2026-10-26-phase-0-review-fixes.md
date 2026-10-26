@@ -600,7 +600,7 @@ git commit -m "Refuse references with an unknown scheme instead of reading them 
 - Modify: `lib/JSONSchema/Validator/Util.pm` (`exception_message`)
 - Test: `t/util_exception_message.t`
 
-- [ ] **Step 1: Add the failing subtests** (add `use Time::HiRes ();`).
+- [x] **Step 1: Add the failing subtests** (add `use Time::HiRes ();`).
 
 ```perl
 subtest 'locations followed by a compile error note are removed' => sub {
@@ -622,15 +622,15 @@ subtest 'stripping takes linear time' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** the file. Expected: `got: 'syntax error at /srv/app/lib/My/Loader.pm line 3, near ...'`, and about 5 seconds against the bound of 1.
+- [x] **Step 2: Run** the file. Expected: `got: 'syntax error at /srv/app/lib/My/Loader.pm line 3, near ...'`, and about 5 seconds against the bound of 1.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - After `line \d+`, also accept `, near "..."`, `, at EOF` and `, at end of line`. Strip only the location and keep the note.
   - Make the filehandle part `<[^>\s]*>` so it cannot scan past one segment.
 
-- [ ] **Step 4: Run** the file and the suite. Expected: PASS, with every existing 'source locations are removed' case unchanged.
+- [x] **Step 4: Run** the file and the suite. Expected: PASS, with every existing 'source locations are removed' case unchanged.
 
-- [ ] **Step 5: Commit.** Changes: extend the existing exception-location line to cover compile errors.
+- [x] **Step 5: Commit.** Changes: extend the existing exception-location line to cover compile errors.
 
 ```bash
 git add lib/JSONSchema/Validator/Util.pm t/util_exception_message.t Changes
