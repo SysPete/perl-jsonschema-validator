@@ -399,4 +399,18 @@ subtest 'a document loaded during validation does not change later results' => s
 
 
 ok detect_warnings() == 0, 'no warnings';
+subtest 'an unknown scheme is not read as a local file' => sub {
+    my %refuse = (
+        base_uri => 'urn:example:schema',
+        scheme_handlers => { file => sub { die "local files are disabled\n" } },
+    );
+    # URI parses a drive letter as a scheme
+    for my $ref ('zz:no_such.json', 'C:/no_such.json') {
+        my $v = JSONSchema::Validator::Draft7->new(schema => { '$ref' => $ref }, %refuse);
+        my ($r, $e) = $v->validate_schema(1);
+        is $r, 0, "$ref fails";
+        unlike errors_text($e), qr/does not exist/, "$ref is not looked up on disk";
+    }
+};
+
 done_testing;

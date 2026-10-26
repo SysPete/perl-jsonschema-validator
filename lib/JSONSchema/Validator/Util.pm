@@ -11,6 +11,7 @@ use File::Basename ();
 use File::Fetch ();
 use Scalar::Util qw( blessed looks_like_number );
 use URI 1.00 ();
+use URI::file ();
 
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
@@ -137,14 +138,15 @@ sub load_schema {
     return $schema;
 }
 
+# URI parses a Windows drive letter as a one-letter scheme.
 sub _local_path {
     my ($resource) = @_;
 
     my $uri = blessed($resource) && $resource->isa('URI') ? $resource : URI->new("$resource");
     my $scheme = $uri->scheme;
 
-    return undef if defined $scheme && $scheme ne 'file';
-    my $path = defined $scheme ? $uri->file : "$resource";
+    return undef if defined $scheme && $scheme ne 'file' && length($scheme) != 1;
+    my $path = defined $scheme && $scheme eq 'file' ? $uri->file : "$resource";
     return defined $path && length $path ? $path : undef;
 }
 
@@ -166,25 +168,22 @@ sub get_content {
     my ($resource, $scheme_handlers) = @_;
 
     my $uri = blessed($resource) && $resource->isa('URI') ? $resource : URI->new($resource);
+    my $scheme = $uri->scheme;
+    $scheme_handlers //= {};
 
-    if ($uri->has_recognized_scheme) {
-        if (my $scheme = $uri->scheme) {
-            $scheme_handlers //= {};
-            if (exists $scheme_handlers->{$scheme}) {
-                return $scheme_handlers->{$scheme}->($uri);
-            }
-            elsif ($scheme eq 'http' || $scheme eq 'https') {
-                return fetch_file($uri->canonical->as_string);
-            }
-            elsif ($scheme eq 'file') {
-                return read_file($uri->file);
-            }
-            croak(sprintf('Unsupported scheme "%s" of URI %s', $scheme // '', $uri->as_string));
-        }
+    return $scheme_handlers->{$scheme}->($uri) if defined $scheme && exists $scheme_handlers->{$scheme};
+
+    return fetch_file($uri->canonical->as_string) if defined $scheme && ($scheme eq 'http' || $scheme eq 'https');
+
+    if (defined(my $path = _local_path($uri))) {
+        return $scheme_handlers->{file}->(URI::file->new($path)) if exists $scheme_handlers->{file};
+        return read_file($path);
     }
 
-    # May it is path of local file without scheme?
-    return read_file("$resource");
+    # An empty path is not local, so it reaches read_file for its usual error.
+    return read_file("$resource") if !defined $scheme || $scheme eq 'file';
+
+    croak(sprintf('Unsupported scheme "%s" of URI %s', $scheme, $uri->as_string));
 }
 
 sub decode_content {

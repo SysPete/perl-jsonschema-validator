@@ -214,6 +214,10 @@ A handler adds a scheme, or replaces how one is loaded.
 
 A handler for C<http> or C<https> also allows documents to load over that scheme without C<fetch_remote>.
 
+A reference whose scheme has no handler and is not C<http>, C<https> or C<file> is refused. A path
+with no scheme, or with a Windows drive letter, is a local file: it goes to the C<file> handler when
+there is one, called with a L<URI::file> object, and is read from disk otherwise.
+
 =head4 fetch_remote
 
 Allow the validator to load C<http> and C<https> references found in the schema. Default value is 0:
