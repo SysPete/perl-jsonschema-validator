@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(unbool round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number resolve_uri exception_message);
+use JSONSchema::Validator::Util qw(unbool round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers exact_numbers format_number resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -541,7 +541,7 @@ sub multipleOf {
 
     my $result = 1;
 
-    my ($x, $m) = comparable_numbers($instance, $multipleOf);
+    my ($x, $m) = exact_numbers($instance, $multipleOf);
     if (is_bignum($x)) {
         $result = _is_bignum_multiple($x, $m);
     } else {

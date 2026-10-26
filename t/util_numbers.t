@@ -12,7 +12,7 @@ use Math::BigInt;
 use Math::BigFloat;
 use Time::HiRes ();
 use JSONSchema::Validator;
-use JSONSchema::Validator::Util qw(is_type detect_type json_equal);
+use JSONSchema::Validator::Util qw(is_type detect_type json_equal comparable_numbers);
 
 my $big = Math::BigInt->new(2)->bpow(70);
 
@@ -443,6 +443,21 @@ subtest 'strict uniqueItems keys large integers by value, however Perl holds the
     is( ($v->validate_schema([1152921504606846976, Math::BigInt->new(2)->bpow(60)]))[0], 0, '2**60 as an integer and a BigInt' );
     is( ($v->validate_schema([9007199254740993, 9007199254740992]))[0], 1, '2**53 + 1 and 2**53 as integers' );
     is( ($v->validate_schema([9007199254740993, 2**53]))[0], 1, '2**53 + 1 as an integer and 2**53 as a float' );
+};
+
+subtest 'two integers or two floats above 2**53 compare without bignums' => sub {
+    my $kinds = sub { join ',', map { ref $_ || 'plain' } comparable_numbers(@_) };
+    is $kinds->(5, 9223372036854775807), 'plain,plain', 'two integers';
+    is $kinds->(1e300, 2**60), 'plain,plain', 'two floats';
+    is $kinds->(9007199254740993, 2**53), 'Math::BigFloat,Math::BigFloat', 'an integer and a float';
+
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => {
+        minimum => -9223372036854775808, exclusiveMaximum => 9223372036854775807 });
+    is( ($v->validate_schema(-9223372036854775807))[0], 1, 'an int64 above the minimum' );
+    my ($r, $e) = $v->validate_schema(9223372036854775807);
+    is $r, 0, 'the int64 maximum is not below itself';
+    like errors_text($e), qr/^9223372036854775807 is equal or greater than 9223372036854775807 /, 'says why';
+    is( ($v->validate_schema(9223372036854775806))[0], 1, 'one less is' );
 };
 
 ok detect_warnings() == 0, 'no warnings';

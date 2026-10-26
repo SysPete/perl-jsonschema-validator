@@ -17,7 +17,8 @@ use URI::file ();
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
-    round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number
+    round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers exact_numbers
+    format_number
     data_section load_schema resolve_uri exception_message is_load_failure resource_name
     discriminator_ref
 );
@@ -312,8 +313,30 @@ sub is_bignum {
 
 sub comparable_numbers {
     my ($x, $y) = @_;
-    # == turns an integer above 2**53 into a float, so 2**53+1 would equal the float 2**53
-    return ($x, $y) unless grep { ref $_ ? is_bignum($_) : abs($_) >= 2**53 } $x, $y;
+    return ($x, $y) unless _has_large_number($x, $y);
+    # Perl compares two integers as integers and two floats as floats, exactly
+    my $kind = ref $x || ref $y ? '' : _number_kind($x);
+    return ($x, $y) if $kind && $kind eq _number_kind($y);
+    return _big_floats($x, $y);
+}
+
+# multipleOf divides, which turns even two integers into floats
+sub exact_numbers {
+    my ($x, $y) = @_;
+    return _has_large_number($x, $y) ? _big_floats($x, $y) : ($x, $y);
+}
+
+# == turns an integer above 2**53 into a float, so 2**53+1 would equal the float 2**53
+sub _has_large_number {
+    return grep { ref $_ ? is_bignum($_) : abs($_) >= 2**53 } @_;
+}
+
+sub _number_kind {
+    my $flags = B::svref_2object(\$_[0])->FLAGS;
+    return $flags & B::SVf_IOK() ? 'integer' : $flags & B::SVf_NOK() ? 'float' : '';
+}
+
+sub _big_floats {
     require Math::BigFloat;
     # a global accuracy or precision set by the host program would round these
     local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
@@ -322,12 +345,17 @@ sub comparable_numbers {
         !ref $_ ? Math::BigFloat->new(_exact_number_string($_))
         : $_->isa('Math::BigFloat') ? $_->copy
         : Math::BigFloat->new($_)
-    } $x, $y;
+    } @_;
 }
 
 sub format_number {
     my ($n) = @_;
-    return B::svref_2object(\$n)->FLAGS & B::SVf_IOK() ? "$n" : _shortest_float_string($n) unless ref $n;
+    unless (ref $n) {
+        # a string keeps the spelling it was given in, but a float's own string has only 15 digits
+        my $s = "$n";
+        no warnings 'numeric';
+        return $s == $n ? $s : _shortest_float_string($n);
+    }
     return "$n" unless is_bignum($n) && !$n->is_nan && !$n->is_inf;
     return abs($n->exponent) <= 100 ? "$n" : $n->bsstr;
 }

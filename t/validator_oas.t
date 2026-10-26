@@ -287,5 +287,25 @@ subtest 'OAS30 discriminator values are schema names' => sub {
     unlike errors_text($errors), qr/HASH\(/, 'without printing the value';
 };
 
+subtest 'OAS30 messages show a numeric parameter as written' => sub {
+    my $validator = JSONSchema::Validator->new(specification => 'OAS30', schema => {
+        openapi => '3.0.0', info => { title => 't', version => '1' },
+        paths => { '/n' => { get => {
+            parameters => [{ name => 'n', in => 'query', schema => { type => 'number', minimum => 8, maximum => 10 } }],
+            responses => { 200 => { description => 'ok' } } } } } });
+    for my $case (
+        ['1.50e1', '1.50e1 is greater than 10 [instance path: /] [schema path: /maximum]'],
+        ['1e400', '1e400 is greater than 10 [instance path: /] [schema path: /maximum]'],
+        ['007.0', '007.0 is less than 8 [instance path: /] [schema path: /minimum]'],
+        ['-0.0', '-0.0 is less than 8 [instance path: /] [schema path: /minimum]'],
+    ) {
+        my ($value, $expected) = @$case;
+        my ($result, $errors) = $validator->validate_request(method => 'get', openapi_path => '/n',
+            parameters => { query => { n => $value } });
+        is $result, 0, "$value is out of range";
+        is errors_text($errors), qq{query param "n" has error: $expected}, "$value is shown as written";
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
