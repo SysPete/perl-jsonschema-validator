@@ -52,8 +52,8 @@ Revision history for JSONSchema-Validator
       exactly, so 9007199254740993 no longer matches 9007199254740992.0
     - minimum, maximum, exclusiveMinimum, exclusiveMaximum and multipleOf
       compare integers above 2**53 exactly
-    - Error messages show a Math::BigInt, like a Math::BigFloat, in
-      exponent form when its exponent is above 100, and a float with all
+    - In error messages, a Math::BigInt or Math::BigFloat with more than
+      100 trailing zeros is shown in exponent form, and a float with all
       the digits that were compared
     - JSONSchema::Validator::Util is documented as internal; its functions
       are not a public interface and may change

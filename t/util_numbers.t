@@ -376,6 +376,7 @@ subtest 'plain integers above 2**53 compare exactly with float bounds' => sub {
         [{ minimum => 1e16 }, 9999999999999999, 0, 'minimum'],
         [{ exclusiveMinimum => 1e16 }, 10000000000000001, 1, 'exclusiveMinimum'],
         [{ multipleOf => 2 }, 9007199254740993, 0, 'multipleOf'],
+        [{ exclusiveMaximum => 9007199254740992 }, 9007199254740993, 0, 'exclusiveMaximum'],
     ) {
         my ($schema, $instance, $expected, $name) = @$case;
         my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema);
@@ -394,6 +395,13 @@ subtest 'messages show every digit a comparison used' => sub {
     my $as_float = errors_text(($v->validate_schema(Math::BigFloat->new('1e150')))[1]);
     my $as_int = errors_text(($v->validate_schema(Math::BigInt->new('1' . '0' x 150)))[1]);
     is $as_int, $as_float, 'a huge value prints the same as a BigInt and a BigFloat';
+
+    $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { maximum => 1.2345678901234567e20 });
+    like errors_text(($v->validate_schema(Math::BigInt->new('123456789012345670001')))[1]),
+        qr/^123456789012345670001 is greater than 1\.2345678901234567e\+20 /, 'a whole float keeps its digits';
+    $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { maximum => 2**53 });
+    like errors_text(($v->validate_schema(9007199254740993))[1]),
+        qr/^9007199254740993 is greater than 9007199254740992 /, '2**53 prints in full';
 };
 
 ok detect_warnings() == 0, 'no warnings';

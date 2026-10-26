@@ -326,7 +326,7 @@ sub comparable_numbers {
 
 sub format_number {
     my ($n) = @_;
-    return int($n) == $n ? "$n" : _exact_number_string($n) unless ref $n;
+    return B::svref_2object(\$n)->FLAGS & B::SVf_IOK() ? "$n" : _shortest_float_string($n) unless ref $n;
     return "$n" unless is_bignum($n) && !$n->is_nan && !$n->is_inf;
     return abs($n->exponent) <= 100 ? "$n" : $n->bsstr;
 }
@@ -336,14 +336,7 @@ sub _exact_number_string {
     # an integer Perl holds as IV/UV prints exactly; halving it below would make it a float
     return "$n" if ref $n || B::svref_2object(\$n)->FLAGS & B::SVf_IOK() || abs($n) == 9**9**9;
 
-    # "$n" keeps 15 significant digits, so 0.1 + 0.2 would read as 0.3; take the shortest that reads back
-    if (int($n) != $n) {
-        for my $digits (15 .. 40) {
-            my $s = sprintf '%.*g', $digits, $n;
-            return $s if $s == $n;
-        }
-        return "$n";
-    }
+    return _shortest_float_string($n) if int($n) != $n;
 
     # Perl stringifies a float to 15 significant digits, and older Windows C libraries
     # pad %.0f with zeros after 17, so halve (exact for a float) below 2**53 and shift back.
@@ -353,6 +346,16 @@ sub _exact_number_string {
 
     require Math::BigInt;
     return $sign . Math::BigInt->new(sprintf('%.0f', $m))->blsft($shift)->bstr;
+}
+
+# "$n" keeps 15 significant digits, so 0.1 + 0.2 would read as 0.3; take the shortest that reads back
+sub _shortest_float_string {
+    my ($n) = @_;
+    for my $digits (15 .. 40) {
+        my $s = sprintf '%.*g', $digits, $n;
+        return $s if $s == $n;
+    }
+    return "$n";
 }
 
 sub json_equal {
