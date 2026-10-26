@@ -14,7 +14,7 @@ use Encode;
 
 use JSONSchema::Validator::JSONPointer 'json_pointer';
 use JSONSchema::Validator::BundledSchemas 'bundled_schema';
-use JSONSchema::Validator::Util qw( load_schema resolve_uri exception_message );
+use JSONSchema::Validator::Util qw( load_schema resolve_uri exception_message is_load_failure );
 
 # what keys contain the schema? Required to find an $id in a schema
 my $SEARCH_ID = {
@@ -164,7 +164,7 @@ sub cache_resolve {
     if ($self->validator->using_id_with_ref) {
         unless (eval { $self->cache_id($uri, $schema); 1 }) {
             my $error = $@;
-            die $error if !ref $error && $error =~ /\A(?:Failed to load resource |Remote fetching is disabled: )/;
+            die $error if is_load_failure($error);
             croak sprintf('Failed to load resource %s: %s', $uri->as_string, exception_message($error));
         }
     }

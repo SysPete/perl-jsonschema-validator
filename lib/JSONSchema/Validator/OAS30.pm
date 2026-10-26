@@ -10,7 +10,7 @@ use JSONSchema::Validator::JSONPointer;
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::Constraints::OAS30;
 use JSONSchema::Validator::URIResolver;
-use JSONSchema::Validator::Util qw(json_decode exception_message);
+use JSONSchema::Validator::Util qw(json_decode exception_message is_load_failure);
 
 use parent 'JSONSchema::Validator::Draft4';
 
@@ -205,7 +205,8 @@ sub _validate_response {
     return $result, $context->{errors}, $context->{warnings};
 }
 
-# Only a reference that fails to load becomes an error, kept with what was found before it; any other die is rethrown unchanged.
+# Only a reference that fails to load becomes an error, kept with what was found before it;
+# any other die is rethrown unchanged.
 sub _catch_exception {
     my ($self, $context, $code) = @_;
 
@@ -215,8 +216,7 @@ sub _catch_exception {
 
     my $exception = $@;
     $#{$self->scopes} = $depth - 1;
-    die $exception unless !ref $exception
-        && $exception =~ /\A(?:Failed to load resource |Remote fetching is disabled: )/;
+    die $exception unless is_load_failure($exception);
 
     push @{$context->{errors}}, error(message => 'exception: ' . exception_message($exception));
     return 0, $context->{errors}, $context->{warnings};

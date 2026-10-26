@@ -16,7 +16,7 @@ our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
     round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number
-    data_section load_schema resolve_uri exception_message
+    data_section load_schema resolve_uri exception_message is_load_failure
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -464,6 +464,11 @@ sub is_string {
 }
 
 # Errors can reach API clients, so drop the "at FILE line N." locations Perl adds.
+sub is_load_failure {
+    my ($exception) = @_;
+    return !ref $exception && $exception =~ /\A(?:Failed to load resource |Remote fetching is disabled: )/;
+}
+
 sub exception_message {
     my ($message) = @_;
     # any file name, since a handler that dies may live in app.psgi or bin/app
