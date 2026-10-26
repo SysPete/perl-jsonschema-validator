@@ -88,10 +88,19 @@ sub validate_schema {
 
     croak 'No schema specified' unless defined $schema;
 
+    my $depth = @{$self->scopes};
     push @{$self->scopes}, $scope if $scope;
 
     my $errors = [];
-    my $result = $self->_validate_schema($instance, $schema, $instance_path, $schema_path, {errors => $errors});
+    my $result;
+    unless (eval {
+        $result = $self->_validate_schema($instance, $schema, $instance_path, $schema_path, {errors => $errors});
+        1;
+    }) {
+        my $error = $@;
+        $#{$self->scopes} = $depth - 1;
+        die $error;
+    }
 
     pop @{$self->scopes} if $scope;
 

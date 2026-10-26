@@ -12,8 +12,13 @@ Revision history for JSONSchema-Validator
       new() searches the schema and documents; a reference in a document
       loaded later, through a file: reference for example, fails when
       validation reaches it.
-    - OpenAPI 3.0 validate_request and validate_response return an
-      "exception:" error instead of dying when a reference fails to load
+    - OpenAPI 3.0 validate_request and validate_response return a reference
+      that fails to load as an "exception:" error, along with the errors
+      and warnings found before it, instead of dying; argument errors and
+      every other exception, including those thrown by parameter getters,
+      still die
+    - validate_schema leaves the validator's scope as it found it when it
+      dies
     - Error messages for exceptions raised during validation no longer
       include the source file and line ("at .../Foo.pm line 12.")
     - References resolve against URN base URIs (urn:uuid:...) instead of

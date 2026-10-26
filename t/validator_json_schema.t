@@ -94,5 +94,16 @@ for my $validator_class (@{$JSONSchema::Validator::JSON_SCHEMA_VALIDATORS}) {
     like $@, qr/invalid schema/, "check exception message on wrong meta schema validation of $resource";
 }
 
+subtest 'validate_schema restores the scope after an exception' => sub {
+    my $validator = JSONSchema::Validator::Draft7->new(base_uri => 'http://e.invalid/a.json', schema => {});
+
+    my $depth = @{$validator->scopes};
+    for my $call (1 .. 3) {
+        eval { $validator->validate_schema(1, schema => 'not a schema', scope => 'http://e.invalid/x.json') };
+        isnt $@, '', "call $call dies";
+        is scalar @{$validator->scopes}, $depth, "scope stack depth after call $call";
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

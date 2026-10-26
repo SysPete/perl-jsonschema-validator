@@ -132,5 +132,75 @@ subtest 'OAS30 empty path parameter' => sub {
         'says why';
 };
 
+my $info = { title => 't', version => '1' };
+my $responses = { 200 => { description => 'ok' } };
+my $missing = 'file://' . test_dir('data/remote_fetching/no_such.json');
+
+subtest 'OAS30 argument errors still croak' => sub {
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/a' => { get => {
+            parameters => [{ name => 'q', in => 'query', schema => { type => 'string' } }],
+            responses => $responses } } } });
+
+    eval { $validator->validate_request(method => 'get', openapi_path => '/a', parameters => { query => [1] }) };
+    like $@, qr/^param "query" must be hashref or coderef/, 'a parameters value of the wrong type';
+
+    my $error = { code => 500 };
+    eval { $validator->validate_request(method => 'get', openapi_path => '/a',
+        parameters => { query => sub { die $error } }) };
+    is $@, $error, 'an exception object from a getter is rethrown';
+
+    eval { $validator->validate_request(method => 'get', openapi_path => '/a',
+        parameters => { query => sub { die "backend down\n" } }) };
+    is $@, "backend down\n", 'a string exception from a getter is rethrown';
+};
+
+subtest 'OAS30 keeps what it found before a reference fails to load' => sub {
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/b' => { post => {
+            deprecated => JSON::PP::true(),
+            parameters => [{ name => 'q', in => 'query', schema => { type => 'integer' } }],
+            requestBody => { '$ref' => $missing },
+            responses => $responses } } } });
+
+    my ($result, $errors, $warnings) = $validator->validate_request(method => 'post', openapi_path => '/b',
+        parameters => { query => { q => 'x' }, body => [1, 'application/json', {}] });
+    is $result, 0, 'fails';
+    like errors_text($errors), qr/query param "q" has error/, 'the parameter error is kept';
+    like errors_text($errors), qr/exception: Failed to load resource/, 'the load failure is reported';
+    like errors_text($warnings), qr/^method post of \/b is deprecated/, 'the deprecation warning is kept';
+};
+
+subtest 'OAS30 restores the scope after an exception' => sub {
+    my $validator = JSONSchema::Validator::OAS30->new(base_uri => 'http://e.invalid/api.json', schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/a' => { post => {
+            requestBody => { content => { 'application/json' => { schema => 'not a schema' } } },
+            responses => $responses } } } });
+
+    my $depth = @{$validator->scopes};
+    for my $call (1 .. 3) {
+        eval { $validator->validate_request(method => 'post', openapi_path => '/a',
+            parameters => { body => [1, 'application/json', {}] }) };
+        isnt $@, '', "call $call dies";
+        is scalar @{$validator->scopes}, $depth, "scope stack depth after call $call";
+    }
+};
+
+subtest 'OAS30 validate_schema restores the scope after an exception' => sub {
+    my $validator = JSONSchema::Validator::OAS30->new(base_uri => 'http://e.invalid/api.json', schema => {
+        openapi => '3.0.3', info => $info, paths => {} });
+
+    my $depth = @{$validator->scopes};
+    for my $call (1 .. 3) {
+        eval { $validator->validate_schema(1, schema => 'not a schema', direction => 'request',
+            scope => 'http://e.invalid/x.json') };
+        isnt $@, '', "call $call dies";
+        is scalar @{$validator->scopes}, $depth, "scope stack depth after call $call";
+    }
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

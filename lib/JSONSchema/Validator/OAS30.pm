@@ -50,15 +50,24 @@ sub validate_schema {
 
     croak 'No schema specified' unless defined $schema;
 
+    my $depth = @{$self->scopes};
     push @{$self->scopes}, $scope if $scope;
 
     my ($errors, $warnings) = ([], []);
-    my $result = $self->_validate_schema($instance, $schema, $instance_path, $schema_path, {
-            errors => $errors,
-            warnings => $warnings,
-            direction => $direction
-        }
-    );
+    my $result;
+    unless (eval {
+        $result = $self->_validate_schema($instance, $schema, $instance_path, $schema_path, {
+                errors => $errors,
+                warnings => $warnings,
+                direction => $direction
+            }
+        );
+        1;
+    }) {
+        my $error = $@;
+        $#{$self->scopes} = $depth - 1;
+        die $error;
+    }
 
     pop @{$self->scopes} if $scope;
 
@@ -89,13 +98,15 @@ sub validate_request {
     my $method = lc($params{method} or croak 'param "method" is required');
     my $openapi_path = $params{openapi_path} or croak 'param "openapi_path" is required';
 
-    return $self->_catch_exception(sub { $self->_validate_request($method, $openapi_path, %params) });
+    my $get_user_param = $self->_wrap_params($params{parameters});
+    my $context = {errors => [], warnings => [], direction => 'request'};
+
+    return $self->_catch_exception($context,
+        sub { $self->_validate_request($method, $openapi_path, $get_user_param, $context, %params) });
 }
 
 sub _validate_request {
-    my ($self, $method, $openapi_path, %params) = @_;
-
-    my $get_user_param = $self->_wrap_params($params{parameters});
+    my ($self, $method, $openapi_path, $get_user_param, $context, %params) = @_;
 
     my $user_body = $params{parameters}{body} // []; # [exists, content-type, value]
 
@@ -112,7 +123,7 @@ sub _validate_request {
     my $operation_ptr = $base_ptr->xget($method);
     return 1, [], [] unless $operation_ptr;
 
-    my ($result, $context) = (1, {errors => [], warnings => [], direction => 'request'});
+    my $result = 1;
     if ($operation_ptr->xget('deprecated')) {
         push @{$context->{warnings}}, error(message => "method $method of $openapi_path is deprecated");
         return $result, $context->{errors}, $context->{warnings} unless $self->validate_deprecated;
@@ -141,21 +152,22 @@ sub validate_response {
     my $openapi_path = $params{openapi_path} or croak 'param "openapi_path" is required';
     my $http_status = $params{status} or croak 'param "status" is required';
 
-    return $self->_catch_exception(
-        sub { $self->_validate_response($method, $openapi_path, $http_status, %params) });
+    my $get_user_param = $self->_wrap_params($params{parameters});
+    my $context = {errors => [], warnings => [], direction => 'response'};
+
+    return $self->_catch_exception($context,
+        sub { $self->_validate_response($method, $openapi_path, $http_status, $get_user_param, $context, %params) });
 }
 
 sub _validate_response {
-    my ($self, $method, $openapi_path, $http_status, %params) = @_;
-
-    my $get_user_param = $self->_wrap_params($params{parameters});
+    my ($self, $method, $openapi_path, $http_status, $get_user_param, $context, %params) = @_;
 
     my $user_body = $params{parameters}{body} // []; # [exists, content-type, value]
 
     my $base_ptr = $self->json_pointer->xget('paths', $openapi_path, $method);
     return 1, [], [] unless $base_ptr;
 
-    my ($result, $context) = (1, {errors => [], warnings => [], direction => 'response'});
+    my $result = 1;
     if ($base_ptr->xget('deprecated')) {
         push @{$context->{warnings}}, error(message => "method $method of $openapi_path is deprecated");
         return $result, $context->{errors}, $context->{warnings} unless $self->validate_deprecated;
@@ -193,13 +205,21 @@ sub _validate_response {
     return $result, $context->{errors}, $context->{warnings};
 }
 
-# A reference that fails to load dies while the document is walked; report it as validation does.
+# Only a reference that fails to load becomes an error, kept with what was found before it; any other die is rethrown unchanged.
 sub _catch_exception {
-    my ($self, $code) = @_;
+    my ($self, $context, $code) = @_;
 
+    my $depth = @{$self->scopes};
     my @result;
     return @result if eval { @result = $code->(); 1 };
-    return 0, [error(message => 'exception: ' . exception_message($@))], [];
+
+    my $exception = $@;
+    $#{$self->scopes} = $depth - 1;
+    die $exception unless !ref $exception
+        && $exception =~ /\A(?:Failed to load resource |Remote fetching is disabled: )/;
+
+    push @{$context->{errors}}, error(message => 'exception: ' . exception_message($exception));
+    return 0, $context->{errors}, $context->{warnings};
 }
 
 sub _validate_body {
