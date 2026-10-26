@@ -175,7 +175,7 @@ sub get_content {
 
     return fetch_file($uri->canonical->as_string) if defined $scheme && ($scheme eq 'http' || $scheme eq 'https');
 
-    if (defined(my $path = _local_path($uri))) {
+    if (defined(my $path = _local_path($resource))) {
         return $scheme_handlers->{file}->(URI::file->new($path)) if exists $scheme_handlers->{file};
         return read_file($path);
     }
