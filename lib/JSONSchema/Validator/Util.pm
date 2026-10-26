@@ -9,6 +9,7 @@ use B ();
 use Carp 'croak';
 use File::Basename ();
 use File::Fetch ();
+use POSIX ();
 use Scalar::Util qw( blessed looks_like_number );
 use URI 1.00 ();
 use URI::file ();
@@ -411,6 +412,8 @@ sub json_equal {
     sub canonical_json_key {
         my ($x) = @_;
 
+        # a global accuracy or precision set by the host program would round bignum keys
+        local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
         return 'n' unless defined $x;
         if (!ref $x) {
             return is_number($x, 1) ? _number_key($x) : 's' . length($x) . ':' . $x;
@@ -433,12 +436,23 @@ sub json_equal {
         if (ref $n) {
             return 'u' . $unique++ if $n->is_nan;
             return $n->is_inf('-') ? 'd-inf' : 'dinf' if $n->is_inf;
+            require Math::BigFloat;
+            my $f = $n->isa('Math::BigFloat') ? $n : Math::BigFloat->new($n);
+            return _binary_key($f->is_neg ? '-' : '', $f->as_int->babs, 0)
+                if $f->is_int && $f->bacmp(Math::BigFloat->new(2)->bpow(53)) >= 0
+                    && $f->bacmp(Math::BigFloat->new(2)->bpow(1024)) < 0;
             # parts is mantissa and exponent without writing out the zeros
             my ($m, $e) = $n->isa('Math::BigFloat') ? $n->parts : ($n->copy, 0);
             ($sign, $digits, $exponent) = ($m < 0 ? '-' : '', $m->copy->babs->bstr, "$e");
         } else {
+            { no warnings 'numeric'; $n = 0 + $n }
             return 'u' . $unique++ if $n != $n;
             return $n < 0 ? 'd-inf' : 'dinf' if abs($n) == 9**9**9;
+            if (abs($n) >= 2**53) {
+                return _binary_key($n < 0 ? '-' : '', abs $n, 0) if is_integer($n, 1);
+                my ($mantissa, $e) = POSIX::frexp(abs $n);
+                return _binary_key($n < 0 ? '-' : '', sprintf('%.0f', $mantissa * 2**53), $e - 53);
+            }
             my $s = _exact_number_string($n);
             $s =~ /\A([-+]?)(\d*)(?:\.(\d*))?(?:[eE]([-+]?\d+))?\z/ or return 'u' . $unique++;
             my $frac = $3 // '';
@@ -449,6 +463,13 @@ sub json_equal {
         return 'd0' if $digits eq '';
         $digits =~ s/(0+)\z// and $exponent += length $1;
         return "d$sign${digits}e$exponent";
+    }
+
+    # an integer from 2**53 up may be an IV, a float or a bignum, and m * 2**e with m odd keys all three alike
+    sub _binary_key {
+        my ($sign, $m, $e) = @_;
+        until ($m & 1) { $m >>= 1; $e++ }
+        return "p$sign$m:$e";
     }
 }
 

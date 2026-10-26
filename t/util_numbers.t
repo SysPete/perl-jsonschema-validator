@@ -10,6 +10,7 @@ use Helper qw/detect_warnings errors_text/;
 use JSON::PP;
 use Math::BigInt;
 use Math::BigFloat;
+use Time::HiRes ();
 use JSONSchema::Validator;
 use JSONSchema::Validator::Util qw(is_type detect_type json_equal);
 
@@ -402,6 +403,46 @@ subtest 'messages show every digit a comparison used' => sub {
     $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { maximum => 2**53 });
     like errors_text(($v->validate_schema(9007199254740993))[1]),
         qr/^9007199254740993 is greater than 9007199254740992 /, '2**53 prints in full';
+};
+
+subtest 'uniqueItems ignores global bignum rounding settings' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    for my $setting (qw/accuracy precision/) {
+        my $value = $setting eq 'accuracy' ? 5 : 2;
+        Math::BigFloat->$setting($value);
+        Math::BigInt->$setting($value);
+
+        is( ($v->validate_schema([9007199254740992, 2**53]))[0], 0, "$setting: 2**53 as an integer and a float" );
+        is( ($v->validate_schema([$big, 2**70]))[0], 0, "$setting: 2**70 as a bignum and a float" );
+
+        Math::BigFloat->$setting(undef);
+        Math::BigInt->$setting(undef);
+    }
+};
+
+subtest 'uniqueItems agrees with json_equal on a numified string' => sub {
+    my $string = "5 ";
+    { no warnings 'numeric'; my $n = $string + 0 }
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    is( ($v->validate_schema([$string, 5]))[0], json_equal($string, 5) ? 0 : 1, '"5 " used as a number, and 5' );
+};
+
+subtest 'strict uniqueItems keys large floats quickly' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    my @floats = map { ($_ + 0.5) * 1e300 } 1 .. 40000;
+    my $start = Time::HiRes::time();
+    is( ($v->validate_schema(\@floats))[0], 1, '40000 distinct floats above 2**53' );
+    cmp_ok Time::HiRes::time() - $start, '<', 5, 'without building a bignum for each';
+    is( ($v->validate_schema([2**60, Math::BigInt->new(2)->bpow(60)]))[0], 0, 'a float and an equal BigInt' );
+    is( ($v->validate_schema([1e300, Math::BigFloat->new('1e300')]))[0], 1, '1e300 as a float is not 10**300' );
+};
+
+subtest 'strict uniqueItems keys large integers by value, however Perl holds them' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true });
+    is( ($v->validate_schema([1152921504606846976, 2**60]))[0], 0, '2**60 as an integer and a float' );
+    is( ($v->validate_schema([1152921504606846976, Math::BigInt->new(2)->bpow(60)]))[0], 0, '2**60 as an integer and a BigInt' );
+    is( ($v->validate_schema([9007199254740993, 9007199254740992]))[0], 1, '2**53 + 1 and 2**53 as integers' );
+    is( ($v->validate_schema([9007199254740993, 2**53]))[0], 1, '2**53 + 1 as an integer and 2**53 as a float' );
 };
 
 ok detect_warnings() == 0, 'no warnings';
