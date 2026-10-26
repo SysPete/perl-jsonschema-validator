@@ -378,7 +378,7 @@ git commit -m "Resolve a root \$ref that points into its own document"
   3. In OAS30, `x-` keys are skipped in the `paths`, `responses` and `callbacks` name maps, but still walked in other name maps such as `properties` and `schemas`.
   4. In OAS30, each string value of a `discriminator`'s `mapping` that contains `/` or ends in `.json` is checked like a `$ref`.
 
-- [ ] **Step 1: Add the failing subtests** to `t/remote_fetching.t`, before `ok detect_warnings() == 0`. They use the file's existing `construct`, `$schema` and `$blocked`.
+- [x] **Step 1: Add the failing subtests** to `t/remote_fetching.t`, before `ok detect_warnings() == 0`. They use the file's existing `construct`, `$schema` and `$blocked`.
 
 ```perl
 subtest 'the scan at new follows local refs into any part of the schema' => sub {
@@ -442,18 +442,20 @@ subtest 'the scan at new loads nothing' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/remote_fetching.t'`. Expected: the first four subtests fail. 'x-named' and 'the scan at new loads nothing' already pass; the latter guards the new local-ref walk.
+- [x] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/remote_fetching.t'`. Expected: the first four subtests fail. 'x-named' and 'the scan at new loads nothing' already pass; the latter guards the new local-ref walk.
 
-- [ ] **Step 3: Implement** the four rules. Update the comment above `_check_remote_refs` so it says the scan follows local references and skips extensions.
+- [x] **Step 3: Implement** the four rules. Update the comment above `_check_remote_refs` so it says the scan follows local references and skips extensions.
 
-- [ ] **Step 4: Run** `t/remote_fetching.t`, `t/oas.t`, `t/validator_oas.t`, then the suite. Expected: PASS, including 'what the scan must not trip on' and 'the scan at new handles a cyclic schema'.
+- [x] **Step 4: Run** `t/remote_fetching.t`, `t/oas.t`, `t/validator_oas.t`, then the suite. Expected: PASS, including 'what the scan must not trip on' and 'the scan at new handles a cyclic schema'.
 
-- [ ] **Step 5: Changes and commit.** Amend the 0.012 INCOMPATIBLE entry's `new()` sentence so it covers references reached through local `$ref`s and discriminator mappings.
+- [x] **Step 5: Changes and commit.** Amend the 0.012 INCOMPATIBLE entry's `new()` sentence so it covers references reached through local `$ref`s and discriminator mappings.
 
 ```bash
 git add lib/JSONSchema/Validator/URIResolver.pm t/remote_fetching.t Changes
 git commit -m "Scan local refs, discriminator mappings and every scope at new, not x- extensions"
 ```
+
+**Departures:** rule 3 skips `x-` keys only in the Paths Object, an operation's Responses Object and a Callback Object, not in `components.responses` or a `callbacks` map, whose keys are names (OpenAPI 3.0). Rule 4 uses `Util::discriminator_ref`, shared with the discriminator, so a bare-name mapping is also followed. `JSONPointer->new` takes an optional `resolver`, which the scan's walk is given instead of reading it from the validator.
 
 ### Task 6: Cache keys and lazily loaded documents never replace an entry
 
