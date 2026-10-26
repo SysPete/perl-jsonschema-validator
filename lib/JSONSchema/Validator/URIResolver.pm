@@ -85,7 +85,8 @@ sub new {
     my %document_keys;
     for my $document_uri (sort keys %$documents) {
         my $key = _document_key($document_uri);
-        croak "documents: $key is already defined" if exists $self->{cache}{$key};
+        croak "documents: $key is already defined"
+            if exists $self->{cache}{$key} && $self->{cache}{$key} != $documents->{$document_uri};
         $document_keys{$document_uri} = $self->_add_document($document_uri, $documents->{$document_uri});
     }
     for my $document_uri (sort keys %$documents) {
@@ -170,11 +171,14 @@ sub cache_resolve {
         $schema = load_schema($uri->as_string, $self->scheme_handlers);
     }
 
+    my %known = map { $_ => 1 } keys %{$self->cache};
     $self->cache->{$uri->as_string} = $schema;
 
     if ($self->validator->using_id_with_ref) {
-        unless (eval { $self->cache_id($uri, $schema); 1 }) {
+        unless (eval { $self->cache_id($uri, $schema, 1); 1 }) {
             my $error = $@;
+            # a half-indexed document would let the next call find some of its $ids and not fail
+            delete @{$self->cache}{grep { !$known{$_} } keys %{$self->cache}};
             die $error if is_load_failure($error);
             croak sprintf('Failed to load resource %s: %s', resource_name($uri->as_string), exception_message($error));
         }
@@ -324,11 +328,12 @@ sub cache_id_dfs {
 
     if (exists $schema->{$self->validator->ID_FIELD} && !ref $schema->{$self->validator->ID_FIELD}) {
         my $id = resolve_uri($schema->{$self->validator->ID_FIELD}, $scopes->[-1]);
+        my $key = _document_key($id->as_string);
 
-        my $existing = $self->cache->{$id->as_string};
-        croak "documents: $id is already defined"
+        my $existing = $self->cache->{$key};
+        croak "documents: $key is already defined"
             if $croak_on_conflict && defined $existing && $existing != $schema;
-        $self->cache->{$id->as_string} = $schema;
+        $self->cache->{$key} = $schema;
         push @$scopes, $id;
     }
 

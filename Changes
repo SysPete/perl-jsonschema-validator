@@ -1,6 +1,10 @@
 Revision history for JSONSchema-Validator
 
 0.012  Not Released
+    - A document loaded during validation whose $id names an entry already
+      known fails with an exception: error instead of replacing it
+    - An $id ending in an empty fragment, as Draft 4 ids usually do, is
+      found by a $ref with or without the #
     - A schema whose root $ref points into its own definitions resolves
     - An OAS30 discriminator value without a mapping entry is matched as a
       schema name under #/components/schemas

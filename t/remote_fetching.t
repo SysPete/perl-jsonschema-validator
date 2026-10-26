@@ -350,5 +350,53 @@ subtest 'the scan at new loads nothing' => sub {
     is_deeply \@loaded, ['urn:example:a'], 'and loads it then';
 };
 
+subtest 'documents may hold the schema itself' => sub {
+    my $root = { '$id' => 'http://e.invalid/root.json', type => 'integer' };
+    is construct('JSONSchema::Validator::Draft7', schema => $root,
+            documents => { 'http://e.invalid/root.json' => $root }),
+        'ok', 'the same schema under its own URI';
+};
+
+subtest 'an $id with an empty fragment collides like one without' => sub {
+    like construct('JSONSchema::Validator::Draft7', schema => { type => 'string' }, documents => {
+            'http://e.invalid/s.json' => { type => 'integer' },
+            'http://e.invalid/a.json' => { '$id' => 'http://e.invalid/s.json#', type => 'string' } }),
+        qr/^documents: http:\/\/e\.invalid\/s\.json is already defined/, 'an $id ending in #';
+};
+
+subtest 'Draft 4 ids ending in # resolve with or without the #' => sub {
+    my $v = eval { JSONSchema::Validator::Draft4->new(schema => {
+        id => 'http://e.invalid/root.json#',
+        definitions => { a => { id => 'http://e.invalid/a.json#', type => 'integer' } },
+        properties => { x => { '$ref' => 'http://e.invalid/a.json' }, y => { '$ref' => 'a.json#' } } }) };
+    is $@, '', 'new finds both refs locally';
+    for my $property (qw/x y/) {
+        my ($r, $e) = $v->validate_schema({ $property => 'no' });
+        is $r, 0, "$property applies the definition";
+        like errors_text($e), qr{^type mismatch .*\[schema path: /properties/$property/}, "$property says why";
+    }
+};
+
+subtest 'a document loaded during validation does not change later results' => sub {
+    my $replacing = '{"definitions":{"a":{"$id":"http://e.invalid/s.json","type":"integer"}}}';
+    my $partial = '{"definitions":{"a":{"$id":"http://e.invalid/a.json","type":"integer"},"b":{"$id":"rel.json"}}}';
+    for my $case (
+        ['an $id naming a preloaded document', $replacing,
+            [{ '$ref' => 'http://e.invalid/s.json' }, { '$ref' => 'urn:example:doc' }]],
+        ['an $id that cannot be resolved', $partial,
+            [{ '$ref' => 'urn:example:doc' }, { '$ref' => 'http://e.invalid/a.json' }]],
+    ) {
+        my ($name, $doc, $all_of) = @$case;
+        my $v = JSONSchema::Validator::Draft7->new(schema => { allOf => $all_of },
+            documents => { 'http://e.invalid/s.json' => { type => 'string' } },
+            scheme_handlers => { urn => sub { (\$doc, 'JSON') }, http => sub { die "no network\n" } });
+        my ($r1, $e1) = $v->validate_schema('abc');
+        my ($r2, $e2) = $v->validate_schema('abc');
+        is $r2, $r1, "$name: same result on the second call";
+        is errors_text($e2), errors_text($e1), "$name: same errors on the second call";
+    }
+};
+
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
