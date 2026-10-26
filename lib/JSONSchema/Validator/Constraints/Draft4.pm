@@ -541,10 +541,11 @@ sub multipleOf {
 
     my $result = 1;
 
-    if (is_bignum($instance) || is_bignum($multipleOf)) {
-        $result = _is_bignum_multiple(comparable_numbers($instance, $multipleOf));
+    my ($x, $m) = comparable_numbers($instance, $multipleOf);
+    if (is_bignum($x)) {
+        $result = _is_bignum_multiple($x, $m);
     } else {
-        my $div = $instance / $multipleOf;
+        my $div = $x / $m;
         $result = 0 if $div == 'Inf' || int($div) != $div;
     }
 

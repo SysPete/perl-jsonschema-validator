@@ -311,7 +311,8 @@ sub is_bignum {
 
 sub comparable_numbers {
     my ($x, $y) = @_;
-    return ($x, $y) unless (ref $x && is_bignum($x)) || (ref $y && is_bignum($y));
+    # == turns an integer above 2**53 into a float, so 2**53+1 would equal the float 2**53
+    return ($x, $y) unless grep { ref $_ ? is_bignum($_) : abs($_) >= 2**53 } $x, $y;
     require Math::BigFloat;
     # a global accuracy or precision set by the host program would round these
     local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
@@ -325,8 +326,9 @@ sub comparable_numbers {
 
 sub format_number {
     my ($n) = @_;
-    return "$n" unless ref $n && is_bignum($n) && $n->isa('Math::BigFloat') && !$n->is_nan;
-    return $n->is_inf || abs($n->exponent) <= 100 ? "$n" : $n->bsstr;
+    return int($n) == $n ? "$n" : _exact_number_string($n) unless ref $n;
+    return "$n" unless is_bignum($n) && !$n->is_nan && !$n->is_inf;
+    return abs($n->exponent) <= 100 ? "$n" : $n->bsstr;
 }
 
 sub _exact_number_string {
@@ -364,11 +366,8 @@ sub json_equal {
         my $x_is_number = is_number($x, 1);
         return 0 unless $x_is_number == is_number($y, 1);
         return ($x eq $y ? 1 : 0) unless $x_is_number;
-        return ($x == $y ? 1 : 0) if abs($x) < 2**53 && abs($y) < 2**53;
-        # == turns an IV into a float, so 2**53+1 would equal the float 2**53
-        require Math::BigFloat;
-        local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
-        return Math::BigFloat->new(_exact_number_string($x)) == Math::BigFloat->new(_exact_number_string($y)) ? 1 : 0;
+        my ($nx, $ny) = comparable_numbers($x, $y);
+        return $nx == $ny ? 1 : 0;
     }
 
     if (is_bool($x, 1) || is_bool($y, 1)) {

@@ -48,8 +48,13 @@ Revision history for JSONSchema-Validator
       as numbers; enum, const and uniqueItems compare numbers numerically
     - With strict (the default for Draft 4, 6 and 7), enum and const no
       longer treat a string and a number as equal: "1" does not match 1
-    - enum, const and uniqueItems compare integers above 2**53 exactly, so
-      9007199254740993 no longer matches 9007199254740992
+    - With strict, enum, const and uniqueItems compare integers above 2**53
+      exactly, so 9007199254740993 no longer matches 9007199254740992.0
+    - minimum, maximum, exclusiveMinimum, exclusiveMaximum and multipleOf
+      compare integers above 2**53 exactly
+    - Error messages show a Math::BigInt, like a Math::BigFloat, in
+      exponent form when its exponent is above 100, and a float with all
+      the digits that were compared
     - JSONSchema::Validator::Util is documented as internal; its functions
       are not a public interface and may change
     - Errors for a local file that fails to load name the file, not its full path

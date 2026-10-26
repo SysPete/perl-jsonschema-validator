@@ -370,5 +370,31 @@ subtest 'non-strict boolean type accepts bignum 0 and 1' => sub {
     is $r, 0, 'huge exponent is not a boolean';
 };
 
+subtest 'plain integers above 2**53 compare exactly with float bounds' => sub {
+    for my $case (
+        [{ maximum => 1e16 }, 10000000000000001, 0, 'maximum'],
+        [{ minimum => 1e16 }, 9999999999999999, 0, 'minimum'],
+        [{ exclusiveMinimum => 1e16 }, 10000000000000001, 1, 'exclusiveMinimum'],
+        [{ multipleOf => 2 }, 9007199254740993, 0, 'multipleOf'],
+    ) {
+        my ($schema, $instance, $expected, $name) = @$case;
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema);
+        is( ($v->validate_schema($instance))[0], $expected, "$name: $instance" );
+    }
+};
+
+subtest 'messages show every digit a comparison used' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7',
+        schema => { exclusiveMaximum => Math::BigFloat->new('0.3') });
+    my ($r, $e) = $v->validate_schema(0.1 + 0.2);
+    is $r, 0, '0.1 + 0.2 is not below 0.3';
+    like errors_text($e), qr/^0\.30000000000000004 is equal or greater than 0\.3 /, 'says by how much';
+
+    $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { maximum => 5 });
+    my $as_float = errors_text(($v->validate_schema(Math::BigFloat->new('1e150')))[1]);
+    my $as_int = errors_text(($v->validate_schema(Math::BigInt->new('1' . '0' x 150)))[1]);
+    is $as_int, $as_float, 'a huge value prints the same as a BigInt and a BigFloat';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
