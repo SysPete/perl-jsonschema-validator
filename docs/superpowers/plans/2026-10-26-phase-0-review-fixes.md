@@ -739,7 +739,7 @@ git commit -m "Compare bignums without writing them out in non-strict checks and
   - `multipleOf` uses `_is_bignum_multiple(comparable_numbers(...))` under the same condition.
   - `format_number` prints a plain non-integer through `_exact_number_string`, and a `Math::BigInt` with more than 100 digits with `bsstr`, so a value prints the same whichever class holds it.
 
-- [ ] **Step 1: Add the failing subtests** after Task 9's.
+- [x] **Step 1: Add the failing subtests** after Task 9's.
 
 ```perl
 subtest 'plain integers above 2**53 compare exactly with float bounds' => sub {
@@ -769,13 +769,13 @@ subtest 'messages show every digit a comparison used' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** the file. Expected: the four bound cases are wrong, and the messages show `0.3 is equal or greater than 0.3` and two different forms of 10\*\*150.
+- [x] **Step 2: Run** the file. Expected: the four bound cases are wrong, and the messages show `0.3 is equal or greater than 0.3` and two different forms of 10\*\*150.
 
-- [ ] **Step 3: Implement** the Interfaces rules.
+- [x] **Step 3: Implement** the Interfaces rules.
 
-- [ ] **Step 4: Run** the file and the suite. Expected: PASS, including the existing 'a huge exponent is never written out in full' cases and their `1e+...` messages.
+- [x] **Step 4: Run** the file and the suite. Expected: PASS, including the existing 'a huge exponent is never written out in full' cases and their `1e+...` messages.
 
-- [ ] **Step 5: Changes and commit.**
+- [x] **Step 5: Changes and commit.**
   - Add: "minimum, maximum, exclusiveMinimum, exclusiveMaximum and multipleOf compare integers above 2\*\*53 exactly", and "error messages show a bignum with more than 100 digits in exponent form, and a float with all the digits that were compared".
   - Reword the existing line to: "With strict, enum, const and uniqueItems compare integers above 2\*\*53 exactly, so 9007199254740993 no longer matches 9007199254740992.0".
 
@@ -783,6 +783,8 @@ subtest 'messages show every digit a comparison used' => sub {
 git add lib/JSONSchema/Validator/Util.pm lib/JSONSchema/Validator/Constraints/Draft4.pm t/util_numbers.t Changes
 git commit -m "Compare bounds above 2**53 exactly and print the digits compared"
 ```
+
+**Departures:** a Math::BigInt prints in exponent form by the same rule as a Math::BigFloat (more than 100 trailing zeros), not by digit count, so a value prints the same in either class. Every plain number that is not held as an integer prints in the shortest form that reads back as the same value.
 
 ### Task 11: Strict `uniqueItems` keys agree with `json_equal` and are cheap for large floats
 
