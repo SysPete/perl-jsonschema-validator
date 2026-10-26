@@ -75,20 +75,22 @@ sub value { shift->{value} }
 
 sub xget {
     my ($self, @parts) = @_;
-    return $self->_walk(1, 0, @parts);
+    return $self->_walk(1, undef, @parts);
 }
 
 sub get {
     # pointer is string which is already urldecoded and utf8-decoded
     my ($self, $pointer) = @_;
     return $self unless $pointer;
-    return $self->_walk(1, 0, $self->_split($pointer));
+    return $self->_walk(1, undef, $self->_split($pointer));
 }
 
 sub document_get {
     my ($self, $pointer, %options) = @_;
     return $self unless $pointer;
-    return $self->_walk(0, $options{cached_only}, $self->_split($pointer));
+    # a cached_only walk carries the $ref targets it has entered, so a cycle ends it like an unpreloaded $ref
+    my $visited = $options{cached_only} ? $options{visited} // {} : undef;
+    return $self->_walk(0, $visited, $self->_split($pointer));
 }
 
 sub _split {
@@ -102,10 +104,10 @@ sub _split {
 }
 
 sub _walk {
-    my ($self, $follow_start, $cached_only, @parts) = @_;
+    my ($self, $follow_start, $visited, @parts) = @_;
 
     my ($current_scope, $current_value, $stopped) =
-        $self->_enter($self->scope, $self->value, $follow_start, $cached_only);
+        $self->_enter($self->scope, $self->value, $follow_start, $visited);
 
     for my $part (@parts) {
         last if $stopped;
@@ -120,7 +122,7 @@ sub _walk {
         }
 
         ($current_scope, $current_value, $stopped) =
-            $self->_enter($current_scope, $current_value, 1, $cached_only);
+            $self->_enter($current_scope, $current_value, 1, $visited);
     }
 
     return __PACKAGE__->new(
@@ -131,13 +133,15 @@ sub _walk {
 }
 
 sub _enter {
-    my ($self, $current_scope, $current_value, $follow, $cached_only) = @_;
+    my ($self, $current_scope, $current_value, $follow, $visited) = @_;
     my $resolver = $self->validator->resolver;
 
     while ($follow && ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
         my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
-        return ($current_scope, $current_value, 1) if $cached_only && !$resolver->is_preloaded($ref);
-        ($current_scope, $current_value) = $resolver->resolve($ref, cached_only => $cached_only);
+        return ($current_scope, $current_value, 1)
+            if $visited && ($visited->{$ref->as_string}++ || !$resolver->is_preloaded($ref));
+        ($current_scope, $current_value) =
+            $resolver->resolve($ref, $visited ? (cached_only => 1, visited => $visited) : ());
     }
 
     if (ref $current_value eq 'HASH' && $self->validator->using_id_with_ref) {

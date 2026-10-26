@@ -155,5 +155,35 @@ subtest 'document_get with cached_only stops at a $ref it would have to load' =>
     is_deeply \@loaded, ['urn:example:x'], 'by loading it';
 };
 
+subtest 'document_get with cached_only stops at a $ref cycle' => sub {
+    # unbounded recursion ends in an "Out of memory!" no eval can catch, so stop at the first warning
+    my $record = $SIG{__WARN__};
+    local $SIG{__WARN__} = sub { die "deep recursion\n" if $_[0] =~ /^Deep recursion/; $record->(@_) };
+
+    my $validator = JSONSchema::Validator::Draft7->new(
+        schema => {},
+        base_uri => 'http://e.invalid/root.json',
+        documents => { 'http://e.invalid/doc.json' => {
+            a => { '$ref' => '#/b' },
+            b => { '$ref' => '#/a' },
+            self => { '$ref' => '#/self' } } });
+    my $pointer = JSONSchema::Validator::JSONPointer->new(
+        scope => 'http://e.invalid/root.json',
+        value => {
+            two_step => { '$ref' => 'http://e.invalid/doc.json#/a' },
+            self => { '$ref' => 'http://e.invalid/doc.json#/self' } },
+        validator => $validator);
+
+    my $got = eval { $pointer->document_get('/two_step/x', cached_only => 1) };
+    is $@, '', 'a two-step cycle ends';
+    is_deeply $got && $got->value, { '$ref' => '#/a' }, 'at the $ref back to its start';
+    is $got && $got->scope, 'http://e.invalid/doc.json#/b', 'with the scope it is in';
+
+    $got = eval { $pointer->document_get('/self/x', cached_only => 1) };
+    is $@, '', 'a self-reference ends';
+    is_deeply $got && $got->value, { '$ref' => '#/self' }, 'at the $ref to itself';
+    is $got && $got->scope, 'http://e.invalid/doc.json#/self', 'with the scope it is in';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
