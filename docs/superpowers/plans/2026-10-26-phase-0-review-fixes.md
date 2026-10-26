@@ -652,7 +652,7 @@ git commit -m "Strip compile error locations from exception messages in linear t
   - `_validate_int_32_64` accepts a bignum only when it `is_int` and lies within `[-2**31, 2**31-1]` / `[-2**63, 2**63-1]`, compared with `bcmp`.
   - `validate_float` returns 1 for a finite bignum.
 
-- [ ] **Step 1: Add the failing subtests** to `t/util_numbers.t`, before `ok detect_warnings() == 0`. The helper goes at file scope.
+- [x] **Step 1: Add the failing subtests** to `t/util_numbers.t`, before `ok detect_warnings() == 0`. The helper goes at file scope.
 
 ```perl
 # The longest string a bignum was written out as while $code ran.
@@ -712,18 +712,20 @@ subtest 'format checks never write a huge exponent out in full' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/util_numbers.t'`. Expected: each non-strict case, the OAS30 `validate_request` case and each format reports `'100001' < '1000'`. The `"1"` and `1`, equal bignums, `enum ["5"]` and int64 limit assertions already pass and guard behaviour the change must keep.
+- [x] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/util_numbers.t'`. Expected: each non-strict case, the OAS30 `validate_request` case and each format reports `'100001' < '1000'`. The `"1"` and `1`, equal bignums, `enum ["5"]` and int64 limit assertions already pass and guard behaviour the change must keep.
 
-- [ ] **Step 3: Implement** the Interfaces rules.
+- [x] **Step 3: Implement** the Interfaces rules.
 
-- [ ] **Step 4: Run** `t/util_numbers.t`, `t/format.t`, `t/oas.t`, `t/validator_oas.t`, then the suite. Expected: PASS.
+- [x] **Step 4: Run** `t/util_numbers.t`, `t/format.t`, `t/oas.t`, `t/validator_oas.t`, then the suite. Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "Non-strict enum, const and uniqueItems, and the int32, int64, float and double formats, compare bignums without writing them out; non-strict enum and const compare objects and arrays as JSON values".
+- [x] **Step 5: Changes and commit.** Changes: "Non-strict enum, const and uniqueItems, and the int32, int64, float and double formats, compare bignums without writing them out; non-strict enum and const compare objects and arrays as JSON values".
 
 ```bash
 git add lib/JSONSchema/Validator/Constraints/Draft4.pm lib/JSONSchema/Validator/Util.pm lib/JSONSchema/Validator/Format.pm t/util_numbers.t Changes
 git commit -m "Compare bignums without writing them out in non-strict checks and formats"
 ```
+
+**Departures:** non-strict `uniqueItems` keys a value by number only when it is finite, and by its string otherwise, so `"nan"` items stay duplicates. Non-strict `is_bool` accepts a bignum 0 or 1, as 0.011 did. Changes also names the `uniqueItems` numeric-value and nested-value comparison.
 
 ### Task 10: Bounds above 2\*\*53 compare exactly, and messages show the digits compared
 
