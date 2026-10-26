@@ -127,7 +127,7 @@ sub _add_document {
 # origin_uri - URI
 # return (scope|string, schema)
 sub resolve {
-    my ($self, $origin_uri) = @_;
+    my ($self, $origin_uri, %options) = @_;
 
     return ($origin_uri->as_string, $self->cache->{$origin_uri->as_string}) if exists $self->cache->{$origin_uri->as_string};
 
@@ -135,7 +135,18 @@ sub resolve {
     $uri->fragment(undef);
 
     my $schema = $self->cache_resolve($uri);
-    return $self->fragment_resolve($origin_uri, $schema);
+    return $self->fragment_resolve($origin_uri, $schema, %options);
+}
+
+# true when resolve can return uri without loading anything
+sub is_preloaded {
+    my ($self, $uri) = @_;
+
+    my $document = $uri->clone;
+    $document->fragment(undef);
+    return exists $self->cache->{$uri->as_string}
+        || exists $self->cache->{$document->as_string}
+        || defined bundled_schema($document->as_string);
 }
 
 # self - URIResolver
@@ -227,12 +238,10 @@ sub _check_remote_ref {
     return unless $scheme eq 'http' || $scheme eq 'https';
     return if exists $self->scheme_handlers->{$scheme};
 
+    return if $self->is_preloaded($uri);
+
     my $document = $uri->clone;
     $document->fragment(undef);
-    return if exists $self->cache->{$uri->as_string}
-           || exists $self->cache->{$document->as_string}
-           || defined bundled_schema($document->as_string);
-
     _croak_remote_disabled($document);
 }
 
@@ -241,7 +250,7 @@ sub _check_remote_ref {
 # schema - HASH/ARRAY
 # return (scope|string, schema)
 sub fragment_resolve {
-    my ($self, $uri, $schema) = @_;
+    my ($self, $uri, $schema, %options) = @_;
     return ($uri->as_string, $self->cache->{$uri->as_string}) if exists $self->cache->{$uri->as_string};
 
     my $enc = Encode::find_encoding("UTF-8");
@@ -254,11 +263,12 @@ sub fragment_resolve {
     );
 
     # try to use fragment as json pointer
-    $pointer = $pointer->get($fragment);
+    $pointer = $pointer->document_get($fragment, %options);
     my $subschema = $pointer->value;
     my $current_scope = $pointer->scope;
 
-    $self->cache->{$uri->as_string} = $subschema;
+    # a cached_only walk can stop at a $ref, which is not the value of this uri
+    $self->cache->{$uri->as_string} = $subschema unless $options{cached_only};
 
     return ($current_scope, $subschema);
 }

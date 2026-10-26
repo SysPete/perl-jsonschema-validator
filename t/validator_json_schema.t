@@ -105,5 +105,55 @@ subtest 'validate_schema restores the scope after an exception' => sub {
     }
 };
 
+subtest 'a root $ref into its own definitions' => sub {
+    # unbounded recursion ends in an "Out of memory!" no eval can catch, so stop at the first warning
+    my $record = $SIG{__WARN__};
+    local $SIG{__WARN__} = sub { die "deep recursion\n" if $_[0] =~ /^Deep recursion/; $record->(@_) };
+
+    my $validator = eval { JSONSchema::Validator->new(schema => {
+        '$schema' => 'http://json-schema.org/draft-07/schema#',
+        '$ref' => '#/definitions/x',
+        definitions => { x => { type => 'integer' } } }) };
+    is $@, '', 'new does not die';
+
+    my ($result, $errors) = eval { $validator->validate_schema(5) };
+    is $result, 1, '5 is an integer' or diag $@ || join "\n", map { $_->message } @{$errors // []};
+    ($result, $errors) = eval { $validator->validate_schema('a') };
+    is $result, 0, '"a" is not an integer';
+    like join("\n", map { $_->message } @{$errors // []}), qr/type mismatch/, 'says why';
+};
+
+subtest 'document_get with cached_only stops at a $ref it would have to load' => sub {
+    my @loaded;
+    my $validator = JSONSchema::Validator::Draft7->new(
+        schema => {},
+        base_uri => 'http://e.invalid/root.json',
+        documents => { 'http://e.invalid/other.json' => { c => { '$ref' => 'urn:example:x' } } },
+        scheme_handlers => { urn => sub { push @loaded, "$_[0]"; return (\'{"b":{"type":"string"}}', 'JSON') } });
+    my $document = {
+        local => { '$ref' => 'urn:example:x' },
+        via_cache => { '$ref' => 'other.json#/c' },
+        bundled => { '$ref' => 'http://json-schema.org/draft-07/schema#/definitions/nonNegativeInteger' },
+    };
+    my $pointer = JSONSchema::Validator::JSONPointer->new(
+        scope => 'http://e.invalid/doc.json', value => $document, validator => $validator);
+
+    my $got = $pointer->document_get('/local/b', cached_only => 1);
+    is_deeply $got->value, { '$ref' => 'urn:example:x' }, 'stops at the $ref';
+    is $got->scope, 'http://e.invalid/doc.json', 'with the scope it is in';
+
+    $got = $pointer->document_get('/via_cache/b', cached_only => 1);
+    is_deeply $got->value, { '$ref' => 'urn:example:x' }, 'stops at a $ref inside a cached document';
+    is $got->scope, 'http://e.invalid/other.json#/c', 'with the scope it is in';
+    is_deeply \@loaded, [], 'loads nothing';
+
+    $got = $pointer->document_get('/bundled', cached_only => 1);
+    is_deeply $got->value, { type => 'integer', minimum => 0 }, 'follows a $ref to a bundled schema';
+
+    $got = $pointer->document_get('/local/b');
+    is_deeply $got->value, { type => 'string' }, 'without cached_only follows the $ref';
+    is_deeply \@loaded, ['urn:example:x'], 'by loading it';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

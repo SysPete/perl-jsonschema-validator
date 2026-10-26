@@ -75,13 +75,69 @@ sub value { shift->{value} }
 
 sub xget {
     my ($self, @parts) = @_;
+    return $self->_walk(1, 0, @parts);
+}
 
-    my $current_scope = $self->scope;
-    my $current_value = $self->value;
+sub get {
+    # pointer is string which is already urldecoded and utf8-decoded
+    my ($self, $pointer) = @_;
+    return $self unless $pointer;
+    return $self->_walk(1, 0, $self->_split($pointer));
+}
 
-    while (ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
+sub document_get {
+    my ($self, $pointer, %options) = @_;
+    return $self unless $pointer;
+    return $self->_walk(0, $options{cached_only}, $self->_split($pointer));
+}
+
+sub _split {
+    my ($self, $pointer) = @_;
+
+    croak "Invalid JSON Pointer $pointer" unless $pointer =~ s!^/!!;
+
+    return length $pointer
+        ? map { $self->unescape($_) } split(/\//, $pointer, -1)
+        : ('');
+}
+
+sub _walk {
+    my ($self, $follow_start, $cached_only, @parts) = @_;
+
+    my ($current_scope, $current_value, $stopped) =
+        $self->_enter($self->scope, $self->value, $follow_start, $cached_only);
+
+    for my $part (@parts) {
+        last if $stopped;
+
+        if (ref $current_value eq 'HASH' && exists $current_value->{$part}) {
+            $current_value = $current_value->{$part};
+        } elsif (ref $current_value eq 'ARRAY' && $part =~ m/^\d+$/ && scalar(@$current_value) > $part) {
+            $current_value = $current_value->[$part];
+        } else {
+            $current_value = undef;
+            last;
+        }
+
+        ($current_scope, $current_value, $stopped) =
+            $self->_enter($current_scope, $current_value, 1, $cached_only);
+    }
+
+    return __PACKAGE__->new(
+        value => $current_value,
+        scope => $current_scope,
+        validator => $self->validator
+    )
+}
+
+sub _enter {
+    my ($self, $current_scope, $current_value, $follow, $cached_only) = @_;
+    my $resolver = $self->validator->resolver;
+
+    while ($follow && ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
         my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
-        ($current_scope, $current_value) = $self->validator->resolver->resolve($ref);
+        return ($current_scope, $current_value, 1) if $cached_only && !$resolver->is_preloaded($ref);
+        ($current_scope, $current_value) = $resolver->resolve($ref, cached_only => $cached_only);
     }
 
     if (ref $current_value eq 'HASH' && $self->validator->using_id_with_ref) {
@@ -93,50 +149,7 @@ sub xget {
         }
     }
 
-    for my $part (@parts) {
-        if (ref $current_value eq 'HASH' && exists $current_value->{$part}) {
-            $current_value = $current_value->{$part};
-        } elsif (ref $current_value eq 'ARRAY' && $part =~ m/^\d+$/ && scalar(@$current_value) > $part) {
-            $current_value = $current_value->[$part];
-        } else {
-            $current_value = undef;
-            last;
-        }
-
-        while (ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
-            my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
-            ($current_scope, $current_value) = $self->validator->resolver->resolve($ref);
-        }
-
-        if (ref $current_value eq 'HASH' && $self->validator->using_id_with_ref) {
-            my $id = $current_value->{$self->validator->ID_FIELD};
-            if ($id && !ref $id) {
-                $current_scope = $current_scope
-                    ? resolve_uri($id, $current_scope)->as_string
-                    : $id;
-            }
-        }
-    }
-
-    return __PACKAGE__->new(
-        value => $current_value,
-        scope => $current_scope,
-        validator => $self->validator
-    )
-}
-
-sub get {
-    # pointer is string which is already urldecoded and utf8-decoded
-    my ($self, $pointer) = @_;
-    return $self unless $pointer;
-
-    croak "Invalid JSON Pointer $pointer" unless $pointer =~ s!^/!!;
-
-    my @parts = length $pointer
-                    ? map { $self->unescape($_) } split(/\//, $pointer, -1)
-                    : ('');
-
-    return $self->xget(@parts);
+    return ($current_scope, $current_value, 0);
 }
 
 sub keys {

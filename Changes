@@ -1,6 +1,7 @@
 Revision history for JSONSchema-Validator
 
 0.012  Not Released
+    - A schema whose root $ref points into its own definitions resolves
     - An OAS30 discriminator value without a mapping entry is matched as a
       schema name under #/components/schemas
     - INCOMPATIBLE: http/https references are no longer fetched by default,
