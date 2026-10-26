@@ -50,7 +50,7 @@
   `cache_resolve` wraps the indexing of a loaded document (`cache_id`) so that any failure there, such as a relative `$id` under a URN or Task 6's `$id` conflict, croaks `Failed to load resource <uri>: <reason>`. `_catch_exception` turns only these two forms into `exception:` errors. Every other die, string or object, is rethrown unchanged, as on 0.011.
 - Produces: `validate_schema` in Draft4 and OAS30 leaves `@{$self->scopes}` as long as it found it, whether it returns or dies. On a die it truncates the stack and rethrows `$@` unchanged.
 
-- [ ] **Step 1: Add the failing subtests** to `t/validator_oas.t`, before `ok detect_warnings() == 0`. The file-level `$info`, `$responses` and `$missing` are shared with Task 2.
+- [x] **Step 1: Add the failing subtests** to `t/validator_oas.t`, before `ok detect_warnings() == 0`. The file-level `$info`, `$responses` and `$missing` are shared with Task 2.
 
 ```perl
 my $info = { title => 't', version => '1' };
@@ -139,12 +139,12 @@ subtest 'validate_schema restores the scope after an exception' => sub {
 };
 ```
 
-- [ ] **Step 2: Run, and confirm the failures**
+- [x] **Step 2: Run, and confirm the failures**
 
 Run: `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/validator_oas.t t/validator_json_schema.t'`
 Expected: the first two subtests and the three scope subtests fail. One example is `got: '2' expected: '1'` for the scope depth. The `backend down` assertion fails because HEAD returns `exception: backend down` instead of dying, and the validate_request scope subtest's "dies" assertions fail for the same reason.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `validate_request` / `validate_response`:
 - Call `_wrap_params` after the existing `method` / `openapi_path` / `status` croaks, outside the eval.
@@ -166,12 +166,12 @@ In `validate_schema` (Draft4 and OAS30):
 
 `_catch_exception` keeps its own truncation for the scopes that `$ref` and `discriminator` handling push inside `_validate_request` / `_validate_response`.
 
-- [ ] **Step 4: Run the files, then the suite**
+- [x] **Step 4: Run the files, then the suite**
 
 Run: `bash -c 'ulimit -v 2000000; timeout 300 prove -l t/validator_oas.t t/validator_json_schema.t t/remote_fetching.t'` then `bash -c 'ulimit -v 2000000; timeout 600 prove -l t'`
 Expected: PASS. The existing subtest 'OAS30 reports a reference that fails to load instead of dying' in `t/remote_fetching.t` must still pass.
 
-- [ ] **Step 5: Changes and commit**
+- [x] **Step 5: Changes and commit**
 
 Reword the existing OAS30 `Changes` entry: only a reference that fails to load is returned as an `exception:` error, along with the errors and warnings found before it; argument errors and every other exception, including those thrown by parameter getters, still die. Add: "validate_schema leaves the validator's scope as it found it when it dies".
 
@@ -190,7 +190,7 @@ git commit -m "Keep OAS30 argument errors fatal and earlier results when a refer
 - Consumes: `$info`, `$responses`, `$missing` from Task 1's test block.
 - Produces: in all three `load_schema` croaks (`Failed to load resource <name>: <reason>`, `Failed to load resource <name> as <type>: <reason>` and `Unsupported type of resource <name>`), a `file:` URI or a path with no scheme is named by the file's base name, and every copy of the full path in `<reason>` becomes that base name. The display name comes from one private `Util.pm` helper, which `load_schema` calls once and `cache_resolve` uses for the `Failed to load resource <uri>: <reason>` croak Task 1 added. Other URIs are unchanged.
 
-- [ ] **Step 1: Add the failing subtests** to `t/validator_oas.t` after Task 1's subtests (add `use File::Temp qw( tempfile );` to the file's `use` lines).
+- [x] **Step 1: Add the failing subtests** to `t/validator_oas.t` after Task 1's subtests (add `use File::Temp qw( tempfile );` to the file's `use` lines).
 
 ```perl
 subtest 'OAS30 does not report server paths when a reference fails to load' => sub {
@@ -223,13 +223,13 @@ subtest 'OAS30 does not report server paths when a file fails to decode' => sub 
 };
 ```
 
-- [ ] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/validator_oas.t'`. Expected: both new subtests fail, and the error text shows the full path.
+- [x] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/validator_oas.t'`. Expected: both new subtests fail, and the error text shows the full path.
 
-- [ ] **Step 3: Implement** in `load_schema`. Use `File::Basename::basename` (core) on `URI->new($resource)->file` for `file:`, or on the path itself when there is no scheme, and use it in all three croak messages, replacing the full path in `<reason>`.
+- [x] **Step 3: Implement** in `load_schema`. Use `File::Basename::basename` (core) on `URI->new($resource)->file` for `file:`, or on the path itself when there is no scheme, and use it in all three croak messages, replacing the full path in `<reason>`.
 
-- [ ] **Step 4: Run** `t/validator_oas.t`, `t/remote_fetching.t`, `t/util_get_content.t`, then the suite. Expected: PASS.
+- [x] **Step 4: Run** `t/validator_oas.t`, `t/remote_fetching.t`, `t/util_get_content.t`, then the suite. Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "Errors for a local file that fails to load name the file, not its full path".
+- [x] **Step 5: Changes and commit.** Changes: "Errors for a local file that fails to load name the file, not its full path".
 
 ```bash
 git add lib/JSONSchema/Validator/Util.pm lib/JSONSchema/Validator/URIResolver.pm t/validator_oas.t Changes
@@ -252,7 +252,7 @@ git commit -m "Name a local file that fails to load by its base name"
     - a value that is a reference (object, array or boolean) fails with the new error `discriminator value is not a string`.
     Both carry the instance path and schema path.
 
-- [ ] **Step 1: Add the failing subtest** (`tempfile` is imported by Task 2).
+- [x] **Step 1: Add the failing subtest** (`tempfile` is imported by Task 2).
 
 ```perl
 subtest 'OAS30 discriminator values are schema names' => sub {
@@ -306,13 +306,13 @@ subtest 'OAS30 discriminator values are schema names' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** `t/validator_oas.t`. Expected: `'#/paths'` and the file path return 1 or the wrong error, the missing property warns `Use of uninitialized value`, and the object value has no such message. The `Dog` and `hound` assertions already pass.
+- [x] **Step 2: Run** `t/validator_oas.t`. Expected: `'#/paths'` and the file path return 1 or the wrong error, the missing property warns `Use of uninitialized value`, and the object value has no such message. The `Dog` and `hound` assertions already pass.
 
-- [ ] **Step 3: Implement** the Interfaces rule in `discriminator`. Push the new error and return 0 before calling `resolve_uri` on a value that is not a schema name.
+- [x] **Step 3: Implement** the Interfaces rule in `discriminator`. Push the new error and return 0 before calling `resolve_uri` on a value that is not a schema name.
 
-- [ ] **Step 4: Run** `t/validator_oas.t`, `t/oas.t`, then the suite. Expected: PASS.
+- [x] **Step 4: Run** `t/validator_oas.t`, `t/oas.t`, then the suite. Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "An OAS30 discriminator value without a mapping entry is matched as a schema name under #/components/schemas".
+- [x] **Step 5: Changes and commit.** Changes: "An OAS30 discriminator value without a mapping entry is matched as a schema name under #/components/schemas".
 
 ```bash
 git add lib/JSONSchema/Validator/Constraints/OAS30.pm t/validator_oas.t Changes
@@ -329,7 +329,7 @@ git commit -m "Match OAS30 discriminator values as schema names"
 - Produces: `JSONPointer::document_get($self, $pointer, %options)`. It is like `get`, but it walks the raw document and does not follow a `$ref` on the value it starts from. It still follows `$ref`s it meets on the way down, as `get` does. `fragment_resolve` uses it, with no options.
   - With `cached_only => 1`, a `$ref` met on the way down whose target is neither in the resolver's cache nor a bundled schema ends the walk. The returned pointer holds that `{ '$ref' => ... }` object and its scope, and nothing is loaded. Task 5 uses this.
 
-- [ ] **Step 1: Add the failing subtest** at the end of `t/validator_json_schema.t`, before `ok detect_warnings() == 0`.
+- [x] **Step 1: Add the failing subtest** at the end of `t/validator_json_schema.t`, before `ok detect_warnings() == 0`.
 
 ```perl
 subtest 'a root $ref into its own definitions' => sub {
@@ -351,13 +351,13 @@ subtest 'a root $ref into its own definitions' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/validator_json_schema.t'`. Expected: `got: '0' expected: '1'` and `'exception: deep recursion'`.
+- [x] **Step 2: Run** `bash -c 'ulimit -v 2000000; timeout 300 prove -lv t/validator_json_schema.t'`. Expected: `got: '0' expected: '1'` and `'exception: deep recursion'`.
 
-- [ ] **Step 3: Implement** `document_get`, sharing the walk with `xget` through a private helper rather than copying it, and call it from `fragment_resolve`.
+- [x] **Step 3: Implement** `document_get`, sharing the walk with `xget` through a private helper rather than copying it, and call it from `fragment_resolve`.
 
-- [ ] **Step 4: Run** `t/validator_json_schema.t`, `t/json_schema.t`, `t/remote_fetching.t`, the suite, and `ACCEPTANCE_TESTING=1 prove -l t/acceptance.t` if `Test::JSON::Schema::Acceptance` is installed (say in the report whether it ran). Expected: PASS.
+- [x] **Step 4: Run** `t/validator_json_schema.t`, `t/json_schema.t`, `t/remote_fetching.t`, the suite, and `ACCEPTANCE_TESTING=1 prove -l t/acceptance.t` if `Test::JSON::Schema::Acceptance` is installed (say in the report whether it ran). Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "A schema whose root $ref points into its own definitions resolves".
+- [x] **Step 5: Changes and commit.** Changes: "A schema whose root $ref points into its own definitions resolves".
 
 ```bash
 git add lib/JSONSchema/Validator/JSONPointer.pm lib/JSONSchema/Validator/URIResolver.pm t/validator_json_schema.t Changes
