@@ -82,17 +82,18 @@ sub new {
     $self->cache_id(URI->new($base_uri), $schema) if $validator->using_id_with_ref && ref $schema eq 'HASH';
 
     # a document must not silently replace the schema, another document or an $id in either
+    my $on_conflict = sub { croak "documents: $_[0] is already defined" };
     my %document_keys;
     for my $document_uri (sort keys %$documents) {
         my $key = _document_key($document_uri);
-        croak "documents: $key is already defined"
-            if exists $self->{cache}{$key} && $self->{cache}{$key} != $documents->{$document_uri};
+        $on_conflict->($key)
+            if exists $self->{cache}{$key} && !_is_same_ref($self->{cache}{$key}, $documents->{$document_uri});
         $document_keys{$document_uri} = $self->_add_document($document_uri, $documents->{$document_uri});
     }
     for my $document_uri (sort keys %$documents) {
         my $document = $documents->{$document_uri};
         next unless $validator->using_id_with_ref && ref $document eq 'HASH';
-        $self->cache_id(URI->new($document_keys{$document_uri}), $document, 1);
+        $self->cache_id(URI->new($document_keys{$document_uri}), $document, $on_conflict);
     }
 
     # fail now, not when some later instance reaches the reference
@@ -108,6 +109,11 @@ sub validator { shift->{validator} }
 sub scheme_handlers { shift->{scheme_handlers} }
 sub fetch_remote { shift->{fetch_remote} }
 sub cache { shift->{cache} }
+
+sub _is_same_ref {
+    my ($x, $y) = @_;
+    return (refaddr($x) // '') eq (refaddr($y) // '');
+}
 
 sub _document_key {
     my ($uri) = @_;
@@ -175,12 +181,16 @@ sub cache_resolve {
     $self->cache->{$uri->as_string} = $schema;
 
     if ($self->validator->using_id_with_ref) {
-        unless (eval { $self->cache_id($uri, $schema, 1); 1 }) {
+        my $name = resource_name($uri->as_string);
+        my $on_conflict = sub {
+            croak sprintf('Failed to load resource %s: $id %s is already defined', $name, resource_name($_[0]));
+        };
+        unless (eval { $self->cache_id($uri, $schema, $on_conflict); 1 }) {
             my $error = $@;
             # a half-indexed document would let the next call find some of its $ids and not fail
             delete @{$self->cache}{grep { !$known{$_} } keys %{$self->cache}};
             die $error if is_load_failure($error);
-            croak sprintf('Failed to load resource %s: %s', resource_name($uri->as_string), exception_message($error));
+            croak sprintf('Failed to load resource %s: %s', $name, exception_message($error));
         }
     }
 
@@ -193,22 +203,21 @@ sub _croak_remote_disabled {
         $uri->as_string);
 }
 
-# Croaks on any reference cache_resolve would refuse to load, using the same scoping as validation.
-# The scan follows local references, and searches a JSON Schema only where schemas can be and an
-# OpenAPI document everywhere but data and the extensions of objects that allow them.
-# context: ref_target - data is a $ref target, whose $id is already in scope (as in validation);
-# components - data is the OpenAPI Components Object
+# Croaks on any reference cache_resolve would refuse to load, scoping each one as validation does.
 sub _check_remote_refs {
     my ($self, $data, $scope, $seen, %context) = @_;
     $seen //= {};
+    # following local refs recurses as deep as the longest chain of them
+    no warnings 'recursion';
 
     if (ref $data eq 'ARRAY') {
         $self->_check_remote_refs($_, $scope, $seen) for @$data;
         return;
     }
     return unless ref $data eq 'HASH';
-    # a schema built in Perl can contain itself, and a $ref can lead back to where it is
-    return if $seen->{"$scope\0" . refaddr $data}++;
+    # a schema built in Perl can contain itself, a $ref can lead back to where it is, and a base
+    # URI's fragment never affects resolution (RFC 3986)
+    return if $seen->{($scope =~ s{#.*}{}sr) . "\0" . refaddr $data}++;
 
     # siblings of $ref are ignored (draft 4-7, OpenAPI 3.0), so are not searched
     if (exists $data->{'$ref'}) {
@@ -217,6 +226,7 @@ sub _check_remote_refs {
     }
 
     my $id = $data->{$self->validator->ID_FIELD};
+    # the scope of a $ref target already includes its $id, as in validation
     if ($self->validator->using_id_with_ref && !$context{ref_target} && defined $id && !ref $id) {
         $scope = eval { resolve_uri($id, $scope)->as_string } // $scope;
     }
@@ -248,6 +258,7 @@ sub _check_remote_refs {
 
 sub _check_remote_ref {
     my ($self, $ref, $scope, $seen) = @_;
+    no warnings 'recursion';
 
     # a reference that can't be resolved at all is reported by validation
     my $uri = eval { resolve_uri($ref, $scope) } or return;
@@ -259,7 +270,7 @@ sub _check_remote_ref {
         # a walk that stops at a $ref returns that $ref object, which is then checked like any other
         my @target = eval {
             $self->fragment_resolve($uri, $self->cache->{$document->as_string}, cached_only => 1)
-        } or return;
+        } or return;    # validation reports a target the walk cannot reach
         $self->_check_remote_refs($target[1], $target[0], $seen, ref_target => 1);
         return;
     }
@@ -305,22 +316,22 @@ sub fragment_resolve {
 # self - URIResolver
 # uri - URI
 # schema - HASH/ARRAY
-# croak_on_conflict - croak instead of replacing an entry for a different schema
+# on_conflict - called with the key instead of replacing an entry for a different schema; must die
 sub cache_id {
-    my ($self, $uri, $schema, $croak_on_conflict) = @_;
+    my ($self, $uri, $schema, $on_conflict) = @_;
 
     # try to find id/$id and cache it to properly handle links in $ref
     # https://json-schema.org/understanding-json-schema/structuring.html#using-id-with-ref
 
     my $scopes = [$uri];
-    $self->cache_id_dfs($schema, $scopes, $croak_on_conflict);
+    $self->cache_id_dfs($schema, $scopes, $on_conflict);
 }
 
 # self - URIResolver
 # schema - HASH/ARRAY
 # scopes - [URI, ...]
 sub cache_id_dfs {
-    my ($self, $schema, $scopes, $croak_on_conflict) = @_;
+    my ($self, $schema, $scopes, $on_conflict) = @_;
     return unless ref $schema eq 'HASH';
 
     # skip all fields (id field too) if $ref present (draft 4-7)
@@ -331,21 +342,20 @@ sub cache_id_dfs {
         my $key = _document_key($id->as_string);
 
         my $existing = $self->cache->{$key};
-        croak "documents: $key is already defined"
-            if $croak_on_conflict && defined $existing && $existing != $schema;
+        $on_conflict->($key) if $on_conflict && defined $existing && !_is_same_ref($existing, $schema);
         $self->cache->{$key} = $schema;
         push @$scopes, $id;
     }
 
     for my $k (keys %$schema) {
         if ($SEARCH_ID->{value}{$k} && ref $schema->{$k} eq 'HASH') {
-            $self->cache_id_dfs($schema->{$k}, $scopes, $croak_on_conflict);
+            $self->cache_id_dfs($schema->{$k}, $scopes, $on_conflict);
         }
 
         if ($SEARCH_ID->{arr_value}{$k} && ref $schema->{$k} eq 'ARRAY') {
             for my $value (@{$schema->{$k}}) {
                 next unless ref $value eq 'HASH';
-                $self->cache_id_dfs($value, $scopes, $croak_on_conflict);
+                $self->cache_id_dfs($value, $scopes, $on_conflict);
             }
         }
 
@@ -353,7 +363,7 @@ sub cache_id_dfs {
             for my $kv_key (keys %{$schema->{$k}}) {
                 my $value = $schema->{$k}{$kv_key};
                 next unless ref $value eq 'HASH';
-                $self->cache_id_dfs($value, $scopes, $croak_on_conflict);
+                $self->cache_id_dfs($value, $scopes, $on_conflict);
             }
         }
     }

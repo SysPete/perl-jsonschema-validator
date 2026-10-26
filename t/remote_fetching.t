@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use Test::More;
+use Time::HiRes ();
 
 use lib 't/lib';
 
@@ -350,6 +351,15 @@ subtest 'the scan at new loads nothing' => sub {
     is_deeply \@loaded, ['urn:example:a'], 'and loads it then';
 };
 
+subtest 'a document that is not a reference conflicts without a numeric warning' => sub {
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+    like construct('JSONSchema::Validator::Draft7', schema => { '$id' => 'http://e.invalid/a.json' },
+            documents => { 'http://e.invalid/a.json' => 'str' }),
+        qr/^documents: http:\/\/e\.invalid\/a\.json is already defined/, 'a string where the schema is';
+    is_deeply \@warnings, [], 'and no warnings';
+};
+
 subtest 'documents may hold the schema itself' => sub {
     my $root = { '$id' => 'http://e.invalid/root.json', type => 'integer' };
     is construct('JSONSchema::Validator::Draft7', schema => $root,
@@ -382,11 +392,13 @@ subtest 'a document loaded during validation does not change later results' => s
     my $partial = '{"definitions":{"a":{"$id":"http://e.invalid/a.json","type":"integer"},"b":{"$id":"rel.json"}}}';
     for my $case (
         ['an $id naming a preloaded document', $replacing,
-            [{ '$ref' => 'http://e.invalid/s.json' }, { '$ref' => 'urn:example:doc' }]],
+            [{ '$ref' => 'http://e.invalid/s.json' }, { '$ref' => 'urn:example:doc' }],
+            'exception: Failed to load resource urn:example:doc: $id http://e.invalid/s.json is already defined'
+            . ' [instance path: /] [schema path: /allOf/1/$ref(urn:example:doc)]'],
         ['an $id that cannot be resolved', $partial,
             [{ '$ref' => 'urn:example:doc' }, { '$ref' => 'http://e.invalid/a.json' }]],
     ) {
-        my ($name, $doc, $all_of) = @$case;
+        my ($name, $doc, $all_of, $expected) = @$case;
         my $v = JSONSchema::Validator::Draft7->new(schema => { allOf => $all_of },
             documents => { 'http://e.invalid/s.json' => { type => 'string' } },
             scheme_handlers => { urn => sub { (\$doc, 'JSON') }, http => sub { die "no network\n" } });
@@ -394,7 +406,19 @@ subtest 'a document loaded during validation does not change later results' => s
         my ($r2, $e2) = $v->validate_schema('abc');
         is $r2, $r1, "$name: same result on the second call";
         is errors_text($e2), errors_text($e1), "$name: same errors on the second call";
+        is errors_text($e1), $expected, "$name: the error names the conflict" if defined $expected;
     }
+};
+
+subtest 'a file loaded during validation that redefines another names neither by its path' => sub {
+    my $v = JSONSchema::Validator::Draft7->new(schema => { allOf => [
+        { '$ref' => 'file://' . test_dir('data/remote_fetching/integer.json') },
+        { '$ref' => 'file://' . test_dir('data/remote_fetching/redefines_integer.json') } ] });
+    my ($r, $e) = $v->validate_schema(1);
+    is $r, 0, 'validation fails';
+    is_deeply [map { $_->message } @$e],
+        ['exception: Failed to load resource redefines_integer.json: $id integer.json is already defined'],
+        'the error names both files without their directory';
 };
 
 
@@ -410,6 +434,35 @@ subtest 'an unknown scheme is not read as a local file' => sub {
         is $r, 0, "$ref fails";
         unlike errors_text($e), qr/does not exist/, "$ref is not looked up on disk";
     }
+};
+
+subtest 'the scan at new checks a ref target once however the ref is spelled' => sub {
+    my @word = split //, 'definitions';
+    my @refs;
+    for my $mask (0 .. 1599) {
+        my $spelling = join '',
+            map { $mask & (1 << $_) ? sprintf('%%%02x', ord $word[$_]) : $word[$_] } 0 .. $#word;
+        push @refs, { '$ref' => "#/$spelling/a" };
+    }
+    my $start = Time::HiRes::time();
+    is construct('JSONSchema::Validator::Draft7', schema => {
+            definitions => { a => { properties => { map { ("p$_" => { type => 'integer' }) } 1 .. 1000 } } },
+            items => \@refs }),
+        'ok', 'new succeeds';
+    cmp_ok Time::HiRes::time() - $start, '<', 2, '1600 spellings of a ref to 1000 properties';
+};
+
+subtest 'the scan at new follows a long chain of local refs without warnings' => sub {
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+    my %definitions = map {
+        ("d$_" => { properties => { next => { '$ref' => '#/definitions/d' . ($_ + 1) } } })
+    } 0 .. 198;
+    $definitions{d199} = { type => 'integer' };
+    is construct('JSONSchema::Validator::Draft7',
+            schema => { '$ref' => '#/definitions/d0', definitions => \%definitions }),
+        'ok', 'new succeeds';
+    is_deeply \@warnings, [], '200 definitions linked by $ref';
 };
 ok detect_warnings() == 0, 'no warnings';
 
