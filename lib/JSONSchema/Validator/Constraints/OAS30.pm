@@ -140,10 +140,30 @@ sub discriminator {
     my $property_name = $discriminator->{propertyName};
     my $mapping = $discriminator->{mapping} // {};
 
-    my $type = $instance->{$property_name};
-    my $ref = $mapping->{$type};
+    my $fail = sub {
+        push @{$data->{errors}}, error(
+            message => shift,
+            instance_path => $instance_path,
+            schema_path => $schema_path
+        );
+        return 0;
+    };
 
-    $ref = $self->__detect_discriminator_ref($ref || $type);
+    return $fail->(qq{instance does not have discriminator property "${property_name}"})
+        unless exists $instance->{$property_name};
+
+    my $type = $instance->{$property_name};
+    return $fail->('discriminator value is not a string') if !defined $type || ref $type;
+
+    my $ref = $mapping->{$type};
+    if ($ref) {
+        $ref = $self->__detect_discriminator_ref($ref);
+    } else {
+        # OAS 3.0 Components keys are limited to this pattern.
+        return $fail->(qq{discriminator value "${type}" is not a schema name})
+            unless $type =~ m/^[a-zA-Z0-9._-]+$/;
+        $ref = '#/components/schemas/' . $type;
+    }
 
     # status == 1 needs to prevent recursion
     $data->{discriminator}{$path} = 1;

@@ -1,6 +1,8 @@
 Revision history for JSONSchema-Validator
 
 0.012  Not Released
+    - An OAS30 discriminator value without a mapping entry is matched as a
+      schema name under #/components/schemas
     - INCOMPATIBLE: http/https references are no longer fetched by default,
       and new() now croaks on a schema containing one. To upgrade, either
       pass fetch_remote => 1 to restore the old behaviour, or preload the

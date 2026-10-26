@@ -232,5 +232,55 @@ subtest 'OAS30 does not report server paths when a file fails to decode' => sub 
     like errors_text($errors), qr/^exception: Failed to load resource \Q$name\E as JSON: /, 'the file is named';
 };
 
+subtest 'OAS30 discriminator values are schema names' => sub {
+    my ($fh, $other_file) = tempfile(UNLINK => 1);
+    print $fh "{}\n";
+    close $fh;
+
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/a' => { post => {
+            requestBody => { content => { 'application/json' => {
+                schema => { '$ref' => '#/components/schemas/Pet' } } } },
+            responses => $responses } } },
+        components => { schemas => {
+            Pet => { type => 'object', required => ['petType'], discriminator => {
+                propertyName => 'petType', mapping => { hound => '#/components/schemas/Dog' } } },
+            Dog => { type => 'object', required => ['bark'] },
+        } } });
+
+    my $request = sub {
+        my $pet_type = shift;
+        return $validator->validate_request(method => 'post', openapi_path => '/a',
+            parameters => { body => [1, 'application/json', { petType => $pet_type }] });
+    };
+
+    my ($result, $errors) = $request->('Dog');
+    is $result, 0, 'a schema name selects that schema';
+    like errors_text($errors), qr/bark/, 'and applies it';
+
+    ($result, $errors) = $request->('hound');
+    is $result, 0, 'a mapping to #/components/schemas/Dog selects Dog';
+    like errors_text($errors), qr/bark/, 'and applies it';
+
+    ($result, $errors) = $request->('#/paths');
+    is $result, 0, 'a JSON pointer is not followed';
+    like errors_text($errors), qr/discriminator value "#\/paths" is not a schema name/, 'says why';
+
+    ($result, $errors) = $request->($other_file);
+    is $result, 0, 'a file path is not followed';
+    like errors_text($errors), qr/is not a schema name/, 'says why';
+
+    ($result, $errors) = $validator->validate_request(method => 'post', openapi_path => '/a',
+        parameters => { body => [1, 'application/json', {}] });
+    is $result, 0, 'a missing discriminator property fails';
+    like errors_text($errors), qr/instance does not have discriminator property "petType"/, 'says why';
+
+    ($result, $errors) = $request->({});
+    is $result, 0, 'an object value fails';
+    like errors_text($errors), qr/discriminator value is not a string/, 'says why';
+    unlike errors_text($errors), qr/HASH\(/, 'without printing the value';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;
