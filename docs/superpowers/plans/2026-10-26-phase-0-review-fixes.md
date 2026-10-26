@@ -469,7 +469,7 @@ git commit -m "Scan local refs, discriminator mappings and every scope at new, n
   2. `cache_id_dfs` looks up and stores each `$id` under `_document_key($id->as_string)`.
   3. `cache_resolve` indexes a loaded document with `$croak_on_conflict` set. If indexing dies, the `eval` Task 1 put around `cache_id` first deletes the document's entry and every key indexing added, then croaks as Task 1 says, so the next call repeats the same failure.
 
-- [ ] **Step 1: Add the failing subtests** to `t/remote_fetching.t` after Task 5's subtests.
+- [x] **Step 1: Add the failing subtests** to `t/remote_fetching.t` after Task 5's subtests.
 
 ```perl
 subtest 'documents may hold the schema itself' => sub {
@@ -520,17 +520,17 @@ subtest 'a document loaded during validation does not change later results' => s
 };
 ```
 
-- [ ] **Step 2: Run** `t/remote_fetching.t`. Expected:
+- [x] **Step 2: Run** `t/remote_fetching.t`. Expected:
   - 'documents may hold the schema itself' fails with `documents: ... is already defined`.
   - The `#` collision builds instead of croaking.
   - The loaded-document cases differ between the two calls.
   - The Draft 4 subtest's `new` croaks `Remote fetching is disabled: cannot load http://e.invalid/a.json`, because the `$id` is cached as `a.json#`. Rule 2 fixes it.
 
-- [ ] **Step 3: Implement** the three rules.
+- [x] **Step 3: Implement** the three rules.
 
-- [ ] **Step 4: Run** `t/remote_fetching.t`, `t/json_schema.t`, `t/validator_json_schema.t`, the suite, and the acceptance run if available. Expected: PASS.
+- [x] **Step 4: Run** `t/remote_fetching.t`, `t/json_schema.t`, `t/validator_json_schema.t`, the suite, and the acceptance run if available. Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "A document loaded during validation whose $id names an entry already known fails with an exception: error instead of replacing it".
+- [x] **Step 5: Changes and commit.** Changes: "A document loaded during validation whose $id names an entry already known fails with an exception: error instead of replacing it".
 
 ```bash
 git add lib/JSONSchema/Validator/URIResolver.pm t/remote_fetching.t Changes
