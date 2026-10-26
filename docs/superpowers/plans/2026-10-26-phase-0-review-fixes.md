@@ -802,7 +802,7 @@ git commit -m "Compare bounds above 2**53 exactly and print the digits compared"
     - an integral bignum: the same, with `Math::BigInt` operations and `bcmp` for the range.
   - No plain number builds a Math::BigInt. Every other number keeps the decimal key. The invariant in the comment above `canonical_json_key` still holds: values `json_equal` finds equal share a key, and values it finds different do not.
 
-- [ ] **Step 1: Add the failing subtests** after Task 10's (add `use Time::HiRes ();`).
+- [x] **Step 1: Add the failing subtests** after Task 10's (add `use Time::HiRes ();`).
 
 ```perl
 subtest 'uniqueItems ignores global bignum rounding settings' => sub {
@@ -846,17 +846,17 @@ subtest 'strict uniqueItems keys large integers by value, however Perl holds the
 };
 ```
 
-- [ ] **Step 2: Run** the file. Expected:
+- [x] **Step 2: Run** the file. Expected:
   - `accuracy: 2**53 ...` gets 1.
   - `"5 " used as a number` gets 1.
   - The 40000 floats take about 10 seconds.
   - 'strict uniqueItems keys large integers by value' already passes. It guards the new key scheme.
 
-- [ ] **Step 3: Implement** the Interfaces rules.
+- [x] **Step 3: Implement** the Interfaces rules.
 
-- [ ] **Step 4: Run** the file, which includes the existing 'strict uniqueItems' and its equal-huge-exponent cases, then the suite and the acceptance run if available. Expected: PASS.
+- [x] **Step 4: Run** the file, which includes the existing 'strict uniqueItems' and its equal-huge-exponent cases, then the suite and the acceptance run if available. Expected: PASS.
 
-- [ ] **Step 5: Commit.** Changes: none (these are fixes within the unreleased uniqueItems rewrite).
+- [x] **Step 5: Commit.** Changes: none (these are fixes within the unreleased uniqueItems rewrite).
 
 ```bash
 git add lib/JSONSchema/Validator/Util.pm t/util_numbers.t
