@@ -341,5 +341,34 @@ subtest 'format checks never write a huge exponent out in full' => sub {
     is( ($v->validate_schema(Math::BigInt->new('9223372036854775808')))[0], 0, 'int64 maximum + 1' );
 };
 
+subtest 'non-strict uniqueItems keys finite numbers by value, others by string' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true }, strict => 0);
+    for my $case (
+        [['nan', 'nan'], 0, '"nan" and "nan" are duplicates'],
+        [[Math::BigFloat->bnan, Math::BigFloat->bnan], 0, 'two BigFloat NaNs are duplicates'],
+        [['1e400', '1e401'], 1, '"1e400" and "1e401" are unique'],
+        [['1.0', 1], 0, '"1.0" and 1 are duplicates'],
+        [['1', 1], 0, '"1" and 1 are duplicates'],
+        [[[1.0], [1]], 0, '[1.0] and [1] are duplicates'],
+    ) {
+        my ($instance, $expected, $name) = @$case;
+        is( ($v->validate_schema($instance))[0], $expected, $name );
+    }
+    my $huge = Math::BigFloat->new('1e100000');
+    cmp_ok longest_bignum_string(sub { $v->validate_schema([Math::BigFloat->binf, Math::BigFloat->bnan, $huge]) }),
+        '<', 1000, 'NaN, inf and a huge exponent';
+};
+
+subtest 'non-strict boolean type accepts bignum 0 and 1' => sub {
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { type => 'boolean' }, strict => 0);
+    is( ($v->validate_schema(Math::BigInt->new(1)))[0], 1, 'BigInt 1' );
+    is( ($v->validate_schema(Math::BigInt->new(0)))[0], 1, 'BigInt 0' );
+    is( ($v->validate_schema(Math::BigInt->new(2)))[0], 0, 'BigInt 2' );
+    my $r;
+    cmp_ok longest_bignum_string(sub { $r = ($v->validate_schema(Math::BigFloat->new('1e100000')))[0] }), '<', 1000,
+        'huge exponent not written out';
+    is $r, 0, 'huge exponent is not a boolean';
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

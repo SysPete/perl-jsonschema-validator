@@ -690,7 +690,10 @@ sub uniqueItems {
         } elsif ($type eq 'object' || $type eq 'array') {
             $value = canonical_json_key($_);
         } elsif ($type eq 'integer' || $type eq 'number') {
-            $value = canonical_json_key(is_bignum($_) ? $_ : 0 + $_);
+            my $n = is_bignum($_) ? $_ : 0 + $_;
+            # NaN and inf keep their string as key, since "1e400" and "1e401" both read as inf
+            my $finite = ref $n ? !($n->is_nan || $n->is_inf) : $n == $n && abs($n) != 9**9**9;
+            $value = $finite ? canonical_json_key($n) : "$_";
         } elsif ($type eq 'boolean') {
             $value = "$_";
         } else {

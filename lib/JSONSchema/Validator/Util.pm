@@ -296,7 +296,7 @@ sub is_bool {
                 $type eq 'JSON::XS::Boolean' or
                 $type eq 'Cpanel::JSON::XS::Boolean';
     return 0 if $_[1]; # is strict
-    return 0 if is_bignum($_[0]);
+    return $_[0]->is_zero || $_[0]->is_one ? 1 : 0 if is_bignum($_[0]);
     my $is_number = looks_like_number($_[0]) && ($_[0] == 1 || $_[0] == 0);
     my $is_string = defined $_[0] && $_[0] eq '';
     my $is_undef = !defined $_[0];
