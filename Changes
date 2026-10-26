@@ -1,6 +1,9 @@
 Revision history for JSONSchema-Validator
 
 0.012  Not Released
+    - Non-strict enum, const and uniqueItems, and the int32, int64, float
+      and double formats, compare bignums without writing them out;
+      non-strict enum and const compare objects and arrays as JSON values
     - A reference with a scheme that has no handler and is not http, https
       or file is refused; a drive-letter path goes to the file handler
     - A document loaded during validation whose $id names an entry already

@@ -285,5 +285,61 @@ subtest 'strict uniqueItems' => sub {
     is( ($v->validate_schema(\@objects))[0], 0, 'a late duplicate is found' );
 };
 
+# The longest string a bignum was written out as while $code ran.
+sub longest_bignum_string {
+    my $code = shift;
+    my $longest = 0;
+    no warnings 'redefine';
+    my ($float, $int) = (\&Math::BigFloat::bstr, \&Math::BigInt::bstr);
+    local *Math::BigFloat::bstr = sub { my $s = $float->(@_); $longest = length $s if length $s > $longest; $s };
+    local *Math::BigInt::bstr = sub { my $s = $int->(@_); $longest = length $s if length $s > $longest; $s };
+    $code->();
+    return $longest;
+}
+
+subtest 'non-strict checks never write a huge exponent out in full' => sub {
+    my $huge = Math::BigFloat->new('1e100000');
+    for my $case (
+        ['uniqueItems', { uniqueItems => JSON::PP::true }, [$huge, 1]],
+        ['enum of arrays', { enum => [[1]] }, [$huge]],
+        ['const array', { const => [1] }, [$huge]],
+        ['enum of strings', { enum => ['x'] }, $huge],
+        ['boolean type', { type => 'boolean' }, $huge],
+    ) {
+        my ($name, $schema, $instance) = @$case;
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => $schema, strict => 0);
+        cmp_ok longest_bignum_string(sub { $v->validate_schema($instance) }), '<', 1000, $name;
+    }
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { uniqueItems => JSON::PP::true }, strict => 0);
+    is( ($v->validate_schema(['1', 1]))[0], 0, 'non-strict uniqueItems still finds "1" and 1 equal' );
+    is( ($v->validate_schema([$huge, Math::BigFloat->new('10e99999')]))[0], 0, 'and equal bignums' );
+    $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { enum => ['5'] }, strict => 0);
+    is( ($v->validate_schema(Math::BigInt->new(5)))[0], 1, 'non-strict enum still matches "5" with a BigInt 5' );
+
+    my $oas = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => { title => 't', version => '1' },
+        paths => { '/a' => { post => {
+            requestBody => { content => { 'application/json' => { schema => {
+                type => 'array', uniqueItems => JSON::PP::true, items => { enum => ['x', [1]] } } } } },
+            responses => { 200 => { description => 'ok' } } } } } });
+    cmp_ok longest_bignum_string(sub { $oas->validate_request(method => 'post', openapi_path => '/a',
+            parameters => { body => [1, 'application/json', [$huge, 1]] }) }),
+        '<', 1000, 'OAS30 validate_request, non-strict by default';
+};
+
+subtest 'format checks never write a huge exponent out in full' => sub {
+    my $huge = Math::BigFloat->new('1e100000');
+    for my $case ([int32 => 0], [int64 => 0], [float => 1], [double => 1]) {
+        my ($format, $expected) = @$case;
+        my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { type => 'number', format => $format });
+        my $r;
+        cmp_ok longest_bignum_string(sub { $r = ($v->validate_schema($huge))[0] }), '<', 1000, $format;
+        is $r, $expected, "$format result";
+    }
+    my $v = JSONSchema::Validator->new(specification => 'Draft7', schema => { type => 'integer', format => 'int64' });
+    is( ($v->validate_schema(Math::BigInt->new('9223372036854775807')))[0], 1, 'int64 maximum' );
+    is( ($v->validate_schema(Math::BigInt->new('9223372036854775808')))[0], 0, 'int64 maximum + 1' );
+};
+
 ok detect_warnings() == 0, 'no warnings';
 done_testing;

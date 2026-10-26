@@ -8,6 +8,8 @@ use Time::Piece;
 
 use Scalar::Util 'looks_like_number';
 
+use JSONSchema::Validator::Util 'is_bignum';
+
 our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     validate_date_time validate_date validate_time
@@ -339,6 +341,12 @@ sub validate_int64 {
 
 sub _validate_int_32_64 {
     my ($num, $abs) = @_;
+    if (is_bignum($num)) {
+        return 0 unless $num->is_int;
+        # a global accuracy or precision set by the host program would round the bounds
+        local ($Math::BigFloat::accuracy, $Math::BigFloat::precision, $Math::BigInt::accuracy, $Math::BigInt::precision);
+        return $num->bcmp("-${abs}8") >= 0 && $num->bcmp("${abs}7") <= 0 ? 1 : 0;
+    }
     return 0 unless $num =~ $INTEGER_PATTERN;
 
     my $sign = index($num, '-') == -1 ? 1 : -1;
@@ -414,6 +422,7 @@ sub validate_uri_template {
 
 # no difference between double and float
 sub validate_float {
+    return 1 if is_bignum($_[0]) && !$_[0]->is_nan && !$_[0]->is_inf;
     return 0 if $_[0] =~ m/\A\s+|\s+\z/;
     return 0 unless looks_like_number $_[0];
     return 1;

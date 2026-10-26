@@ -10,7 +10,7 @@ use Carp 'croak';
 
 use JSONSchema::Validator::Error 'error';
 use JSONSchema::Validator::JSONPointer 'json_pointer';
-use JSONSchema::Validator::Util qw(serialize unbool round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number resolve_uri exception_message);
+use JSONSchema::Validator::Util qw(unbool round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number resolve_uri exception_message);
 use JSONSchema::Validator::Format qw(
     validate_date_time validate_date validate_time
     validate_email validate_hostname
@@ -446,8 +446,12 @@ sub _loose_equal {
     } elsif ($self->check_type($e, 'object', 1) || $self->check_type($e, 'array', 1)) {
         return  $self->check_type($instance, 'object') ||
                 $self->check_type($instance, 'array')
-                    ? serialize($instance) eq serialize($e)
+                    ? json_equal($instance, $e)
                     : 0;
+    } elsif (is_bignum($instance)) {
+        return 0 unless $self->check_type($e, 'number');
+        my ($x, $y) = comparable_numbers($instance, $e);
+        return $x == $y ? 1 : 0;
     } elsif ($self->check_type($e, 'number', 1)) {
         return  $self->check_type($instance, 'number')
                     ? $e == $instance
@@ -684,11 +688,13 @@ sub uniqueItems {
         if ($type eq 'null') {
             $value = ''
         } elsif ($type eq 'object' || $type eq 'array') {
-            $value = serialize($_);
+            $value = canonical_json_key($_);
+        } elsif ($type eq 'integer' || $type eq 'number') {
+            $value = canonical_json_key(is_bignum($_) ? $_ : 0 + $_);
         } elsif ($type eq 'boolean') {
             $value = "$_";
         } else {
-            # integer/number/string
+            # string
             $value = $_;
         }
 
