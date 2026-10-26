@@ -550,7 +550,7 @@ git commit -m "Never replace a cached document, and key \$ids without an empty f
   3. `file:`, a URI with no scheme, or a single-letter scheme (a Windows drive) is a local path. It goes to the `file` handler when one is given, called with `URI::file->new($path)`; otherwise it goes to `read_file`.
   4. Anything else croaks `Unsupported scheme "<scheme>" of URI <uri>` (the existing message).
 
-- [ ] **Step 1: Add the failing subtests.** In `t/remote_fetching.t`:
+- [x] **Step 1: Add the failing subtests.** In `t/remote_fetching.t`:
 
 ```perl
 subtest 'an unknown scheme is not read as a local file' => sub {
@@ -579,18 +579,20 @@ subtest 'a drive letter is a path' => sub {
 };
 ```
 
-- [ ] **Step 2: Run** both files. Expected: `zz:` reports `does not exist` in both, and the `C:/` case in `t/remote_fetching.t` reaches `read_file`.
+- [x] **Step 2: Run** both files. Expected: `zz:` reports `does not exist` in both, and the `C:/` case in `t/remote_fetching.t` reaches `read_file`.
 
-- [ ] **Step 3: Implement** the four-step order. In the `fetch_remote` POD recipe, add that a reference whose scheme has no handler and is not `http`, `https` or `file` is refused.
+- [x] **Step 3: Implement** the four-step order. In the `fetch_remote` POD recipe, add that a reference whose scheme has no handler and is not `http`, `https` or `file` is refused.
 
-- [ ] **Step 4: Run** `t/remote_fetching.t`, `t/util_get_content.t`, then the suite. Expected: PASS.
+- [x] **Step 4: Run** `t/remote_fetching.t`, `t/util_get_content.t`, then the suite. Expected: PASS.
 
-- [ ] **Step 5: Changes and commit.** Changes: "A reference with a scheme that has no handler and is not http, https or file is refused; a drive-letter path goes to the file handler".
+- [x] **Step 5: Changes and commit.** Changes: "A reference with a scheme that has no handler and is not http, https or file is refused; a drive-letter path goes to the file handler".
 
 ```bash
 git add lib/JSONSchema/Validator/Util.pm lib/JSONSchema/Validator/Draft4.pm t/remote_fetching.t t/util_get_content.t Changes
 git commit -m "Refuse references with an unknown scheme instead of reading them as paths"
 ```
+
+**Departures:** `_local_path` is the one local-path decision for `get_content`, `load_schema` and `resource_name`, and treats a drive letter as a path (Task 2 ruling).
 
 ### Task 8: `exception_message` strips compile-error locations, in linear time
 
