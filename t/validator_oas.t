@@ -266,6 +266,11 @@ subtest 'OAS30 discriminator values are schema names' => sub {
     ($result, $errors) = $request->('#/paths');
     is $result, 0, 'a JSON pointer is not followed';
     like errors_text($errors), qr/discriminator value "#\/paths" is not a schema name/, 'says why';
+    like errors_text($errors), qr/\[instance path: \/\] \[schema path: \/discriminator\]/, 'at the instance and schema paths';
+
+    ($result, $errors) = $request->("Dog\n");
+    is $result, 0, 'a name with a trailing newline fails';
+    like errors_text($errors), qr/is not a schema name/, 'says why';
 
     ($result, $errors) = $request->($other_file);
     is $result, 0, 'a file path is not followed';

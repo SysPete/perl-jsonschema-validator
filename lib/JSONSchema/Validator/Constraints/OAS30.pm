@@ -161,7 +161,7 @@ sub discriminator {
     } else {
         # OAS 3.0 Components keys are limited to this pattern.
         return $fail->(qq{discriminator value "${type}" is not a schema name})
-            unless $type =~ m/^[a-zA-Z0-9._-]+$/;
+            unless $type =~ m/\A[a-zA-Z0-9._-]+\z/;
         $ref = '#/components/schemas/' . $type;
     }
 
