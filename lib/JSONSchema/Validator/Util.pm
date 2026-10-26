@@ -16,7 +16,7 @@ our @ISA = 'Exporter';
 our @EXPORT_OK = qw(
     json_encode json_decode serialize unbool
     round is_type detect_type is_bignum json_equal canonical_json_key comparable_numbers format_number
-    data_section load_schema resolve_uri exception_message is_load_failure
+    data_section load_schema resolve_uri exception_message is_load_failure resource_name
 );
 
 use constant CONTENT_TYPE_JSON => 'JSON';
@@ -112,20 +112,46 @@ sub round {
 sub load_schema {
     my ($resource, $scheme_handlers) = @_;
 
+    my $name = resource_name($resource);
+    my $path = _local_path($resource);
+    my $named = sub {
+        my ($reason) = @_;
+        $reason =~ s/\Q$path\E/$name/g if defined $path;
+        return $reason;
+    };
+
     my ($content_ref, $content_type) = eval { get_content($resource, $scheme_handlers) };
 
     if ($@) {
-        croak(sprintf('Failed to load resource %s: %s', $resource, $@));
+        croak(sprintf('Failed to load resource %s: %s', $name, $named->($@)));
     }
 
     my $schema = eval { decode_content($content_ref, $content_type) };
 
     if ($@) {
-        croak(sprintf('Failed to load resource %s as %s: %s', $resource, $content_type, $@)) if $content_type;
-        croak(sprintf('Unsupported type of resource %s', $resource));
+        croak(sprintf('Failed to load resource %s as %s: %s', $name, $content_type, $named->($@))) if $content_type;
+        croak(sprintf('Unsupported type of resource %s', $name));
     }
 
     return $schema;
+}
+
+sub _local_path {
+    my ($resource) = @_;
+
+    my $uri = blessed($resource) && $resource->isa('URI') ? $resource : URI->new("$resource");
+    my $scheme = $uri->scheme;
+
+    return undef if defined $scheme && $scheme ne 'file';
+    my $path = defined $scheme ? $uri->file : "$resource";
+    return defined $path && length $path ? $path : undef;
+}
+
+# Errors can reach API clients, so a local file is named by its base name, not its server path.
+sub resource_name {
+    my ($resource) = @_;
+    my $path = _local_path($resource);
+    return defined $path ? File::Basename::basename($path) : "$resource";
 }
 
 sub get_content {

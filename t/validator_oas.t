@@ -2,6 +2,7 @@
 
 use strict;
 use warnings;
+use File::Temp qw( tempfile );
 use Test::More;
 
 use lib 't/lib';
@@ -200,6 +201,35 @@ subtest 'OAS30 validate_schema restores the scope after an exception' => sub {
         isnt $@, '', "call $call dies";
         is scalar @{$validator->scopes}, $depth, "scope stack depth after call $call";
     }
+};
+
+subtest 'OAS30 does not report server paths when a reference fails to load' => sub {
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/b' => { post => { requestBody => { '$ref' => $missing }, responses => $responses } } } });
+
+    my ($result, $errors) = $validator->validate_request(method => 'post', openapi_path => '/b',
+        parameters => { body => [1, 'application/json', {}] });
+    is $result, 0, 'fails';
+    unlike errors_text($errors), qr/\Q${\ test_dir()}\E/, 'the file path is not in the error';
+    like errors_text($errors), qr/^exception: Failed to load resource no_such\.json: /, 'the file is named';
+};
+
+subtest 'OAS30 does not report server paths when a file fails to decode' => sub {
+    my ($fh, $file) = tempfile(SUFFIX => '.json', UNLINK => 1);
+    print $fh "{\n";
+    close $fh;
+    my ($name) = $file =~ m{([^/\\]+)\z};
+
+    my $validator = JSONSchema::Validator->new(schema => {
+        openapi => '3.0.3', info => $info,
+        paths => { '/b' => { post => { requestBody => { '$ref' => 'file://' . $file }, responses => $responses } } } });
+
+    my ($result, $errors) = $validator->validate_request(method => 'post', openapi_path => '/b',
+        parameters => { body => [1, 'application/json', {}] });
+    is $result, 0, 'fails';
+    unlike errors_text($errors), qr/\Q$file\E/, 'the file path is not in the error';
+    like errors_text($errors), qr/^exception: Failed to load resource \Q$name\E as JSON: /, 'the file is named';
 };
 
 ok detect_warnings() == 0, 'no warnings';

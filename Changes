@@ -35,6 +35,7 @@ Revision history for JSONSchema-Validator
       9007199254740993 no longer matches 9007199254740992
     - JSONSchema::Validator::Util is documented as internal; its functions
       are not a public interface and may change
+    - Errors for a local file that fails to load name the file, not its full path
 
 0.011  2022-08-24
     - Added checking params from schema
