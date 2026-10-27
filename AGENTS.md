@@ -32,7 +32,7 @@ Run from the repository root.
 ```sh
 prove -l t                    # full test suite
 prove -l t/json_schema.t      # one file
-ACCEPTANCE_TESTING=1 prove -l t/acceptance.t
+PERL5LIB=local/lib/perl5 ACCEPTANCE_TESTING=1 prove -l t/acceptance.t
                               # official JSON-Schema-Test-Suite; needs
                               # Test::JSON::Schema::Acceptance (and Perl 5.20+)
 ```
