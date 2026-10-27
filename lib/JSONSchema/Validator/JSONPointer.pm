@@ -114,8 +114,14 @@ sub _split {
 sub _walk {
     my ($self, $follow_start, $visited, @parts) = @_;
 
-    my ($current_scope, $current_value, $stopped) =
-        $self->_enter($self->scope, $self->value, $follow_start, $visited);
+    # _enter is skipped for a value with no $ref or id, which is most steps of a walk on this hot path
+    my $id_field = $self->validator->using_id_with_ref ? $self->validator->ID_FIELD : undef;
+
+    my ($current_scope, $current_value, $stopped) = ($self->scope, $self->value, 0);
+    ($current_scope, $current_value, $stopped) =
+        $self->_enter($current_scope, $current_value, $follow_start, $visited)
+        if ref $current_value eq 'HASH'
+            && ($current_value->{'$ref'} || defined $id_field && $current_value->{$id_field});
 
     for my $part (@parts) {
         last if $stopped;
@@ -130,7 +136,9 @@ sub _walk {
         }
 
         ($current_scope, $current_value, $stopped) =
-            $self->_enter($current_scope, $current_value, 1, $visited);
+            $self->_enter($current_scope, $current_value, 1, $visited)
+            if ref $current_value eq 'HASH'
+                && ($current_value->{'$ref'} || defined $id_field && $current_value->{$id_field});
     }
 
     return __PACKAGE__->new(
@@ -143,9 +151,9 @@ sub _walk {
 
 sub _enter {
     my ($self, $current_scope, $current_value, $follow, $visited) = @_;
-    my $resolver = $self->resolver;
 
     while ($follow && ref $current_value eq 'HASH' && $current_value->{'$ref'}) {
+        my $resolver = $self->resolver;
         my $ref = resolve_uri($current_value->{'$ref'}, $current_scope);
         return ($current_scope, $current_value, 1)
             if $visited && ($visited->{$ref->as_string}++ || !$resolver->is_preloaded($ref));
